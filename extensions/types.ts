@@ -41,6 +41,10 @@ export interface SearchConfig {
 	reader?: "jina" | "sofya" | "trafilatura";
 	/** Show status line with enabled backends. Default: true. Set to false to hide. */
 	showStatus?: boolean;
+	/** Enable the web_search tool. Default: true. */
+	enableWebSearch?: boolean;
+	/** Enable the web_read tool. Default: true. */
+	enableWebRead?: boolean;
 	/** Cache TTL in milliseconds. Default: 300000 (5 min). Set to 0 to disable. */
 	cacheTtl?: number;
 	/** Max cached queries. Default: 100. */

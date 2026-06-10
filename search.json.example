@@ -2,6 +2,8 @@
   "defaultBackend": "auto",
   "reader": "trafilatura",
   "showStatus": true,
+  "enableWebSearch": true,
+  "enableWebRead": true,
   "backends": {
     "duckduckgo": { "enabled": true },
     "sofya": { "enabled": true, "apiKey": "SOFYA_API_KEY", "searchDepth": "basic" },
