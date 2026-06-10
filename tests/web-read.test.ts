@@ -27,38 +27,6 @@ describe("web_read tool", () => {
 		vi.resetModules();
 	});
 
-	it("maps objective to Jina CSS selector header", async () => {
-		fetchSpy.mockResolvedValueOnce({
-			ok: true,
-			text: async () => "ok",
-		} as Response);
-
-		const tools: Record<string, { execute: Function }> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
-		extension({
-			registerTool(tool: { name: string; execute: Function }) {
-				tools[tool.name] = tool;
-			},
-			registerCommand() {},
-			on() {},
-		} as any);
-
-		await tools.web_read.execute("call", {
-			url: "example.com",
-			objective: "main.article-body",
-			mode: "smart",
-		}, undefined, undefined, { cwd: process.cwd() });
-
-		expect(fetchSpy).toHaveBeenCalledTimes(1);
-		const [requestUrl, requestInit] = fetchSpy.mock.calls[0];
-		expect(requestUrl).toBe("https://r.jina.ai/https://example.com");
-		expect((requestInit as RequestInit).headers).toMatchObject({
-			Accept: "text/plain",
-			"x-target-selector": "main.article-body",
-			"x-respond-with": "markdown",
-		});
-	});
-
 	it("surfaces fetch cause details in thrown error", async () => {
 		fetchSpy.mockRejectedValueOnce(Object.assign(new Error("fetch failed"), {
 			cause: {

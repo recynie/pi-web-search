@@ -61,7 +61,6 @@ Read https://docs.example.com/api-reference
 
 The `web_read` tool supports:
 
-- **objective** — CSS selector to target specific content with Jina Reader (e.g. `div.article-body`)
 - **keywords** — relevant terms to highlight on long pages
 - **mode** — `rush` for speed (return innerText) or `smart` (markdown extraction)
 - **fresh** — bypass cache when freshness matters

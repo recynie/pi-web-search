@@ -247,13 +247,11 @@ export default function (pi: ExtensionAPI) {
 		name: "web_read",
 		label: "Read Web Page",
 		description:
-			"Fetch a URL as markdown. Use objective for a CSS selector, keywords for long pages, " +
-			"rush for speed, smart for better narrowing. Use reader param to switch between " +
-			"Jina (default, free) and Sofya (250+ site parsers, needs API key).",
+			"Fetch a URL as markdown. Use keywords for long pages, rush for speed, smart for better narrowing. " +
+			"Use reader param to switch between Jina (default, free) and Sofya (250+ site parsers, needs API key).",
 		promptSnippet: "Read content from a web page (supports markdown extraction)",
 		promptGuidelines: [
 			"Use web_read when you need to read the content of a specific URL",
-			"Set objective to a CSS selector when only part of the page matters",
 			"Add keywords for long pages when you know the relevant terms",
 			"Choose rush for speed or smart for higher-quality narrowing",
 		],
@@ -276,16 +274,10 @@ export default function (pi: ExtensionAPI) {
 					description: "rush = faster mode, smart = better section selection on long/noisy pages",
 				}),
 			),
-			objective: Type.Optional(
-				Type.String({
-					description:
-						"CSS selector for targeted extraction. Use when only part of the page matters. (Jina reader only.)",
-				}),
-			),
 			reader: Type.Optional(
 				StringEnum(["jina", "sofya"] as const, {
 					description:
-						"Reader backend: 'jina' (default, free, supports keywords/mode/objective) or " +
+						"Reader backend: 'jina' (default, free, supports keywords/mode) or " +
 						"'sofya' (250+ site-specific parsers, needs API key). Overrides the configured default.",
 				}),
 			),
@@ -309,7 +301,7 @@ export default function (pi: ExtensionAPI) {
 				const result = await fetchSofya(url, sofyaKey, signal);
 				content = result.content;
 			} else {
-				// Jina Reader: free, supports keywords / mode / CSS selector targeting.
+				// Jina Reader: free, supports keywords and mode hints.
 				const readerUrl = new URL("https://r.jina.ai/" + url);
 
 				const headers: Record<string, string> = {
@@ -330,9 +322,6 @@ export default function (pi: ExtensionAPI) {
 				}
 				if (params.mode) {
 					headers["x-respond-with"] = params.mode === "rush" ? "text" : "markdown";
-				}
-				if (params.objective) {
-					headers["x-target-selector"] = params.objective;
 				}
 
 				let response: Response;
