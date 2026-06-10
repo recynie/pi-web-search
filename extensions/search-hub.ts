@@ -40,6 +40,8 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { keyHint } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
@@ -58,11 +60,15 @@ import { formatResults, formatCombinedResults, formatResultsCompact, formatCombi
 // ---------------------------------------------------------------------------
 
 export default function (pi: ExtensionAPI) {
+	// Load config eagerly so enableWebSearch / enableWebRead flags are
+	// available at registration time (before the first session_start fires).
+	refreshConfig(process.cwd(), true);
+
 	// -----------------------------------------------------------------------
 	// Tool: web_search
 	// -----------------------------------------------------------------------
 
-	pi.registerTool({
+	if (config.enableWebSearch !== false) pi.registerTool({
 		name: "web_search",
 		label: "Web Search",
 		description:
@@ -238,13 +244,35 @@ export default function (pi: ExtensionAPI) {
 				throw new Error(`All backends failed: ${errors.join("; ")}`);
 			}
 		},
+		renderResult(result, { expanded }, theme) {
+			const details = result.details as { backend: string; resultCount: number; errors?: string[] } | undefined;
+			const text = result.content[0];
+			const raw = text?.type === "text" ? text.text : "";
+			if (!details) return new Text(raw, 0, 0);
+
+			if (!expanded) {
+				const hint = keyHint("app.tools.expand", "expand");
+				const errorMark = details.errors?.length
+					? theme.fg("warning", " [some backends failed]")
+					: "";
+				return new Text(
+					theme.fg("success", `✓ ${details.resultCount} result${details.resultCount === 1 ? "" : "s"}`) +
+					theme.fg("muted", ` via ${details.backend}`) +
+					errorMark +
+					theme.fg("dim", ` (${hint})`),
+					0, 0,
+				);
+			}
+
+			return new Text(raw, 0, 0);
+		},
 	});
 
 	// -----------------------------------------------------------------------
 	// Tool: web_read — Read/extract content from a URL
 	// -----------------------------------------------------------------------
 
-	pi.registerTool({
+	if (config.enableWebRead !== false) pi.registerTool({
 		name: "web_read",
 		label: "Read Web Page",
 		description:
@@ -361,6 +389,30 @@ export default function (pi: ExtensionAPI) {
 					truncated: content.length > 10000,
 				},
 			};
+		},
+		renderResult(result, { expanded }, theme) {
+			const details = result.details as { url: string; reader: string; length: number; truncated: boolean } | undefined;
+			const text = result.content[0];
+			const raw = text?.type === "text" ? text.text : "";
+			if (!details) return new Text(raw, 0, 0);
+
+			const url = details.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+			const shortUrl = url.length > 50 ? url.slice(0, 50) + "…" : url;
+			const sizeKb = Math.round(details.length / 1024);
+			const truncMark = details.truncated ? theme.fg("warning", " [truncated]") : "";
+
+			if (!expanded) {
+				const hint = keyHint("app.tools.expand", "expand");
+				return new Text(
+					theme.fg("accent", shortUrl) +
+					theme.fg("muted", ` · ${sizeKb}KB via ${details.reader}`) +
+					truncMark +
+					theme.fg("dim", ` (${hint})`),
+					0, 0,
+				);
+			}
+
+			return new Text(raw, 0, 0);
 		},
 	});
 
