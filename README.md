@@ -1,6 +1,6 @@
 # pi-search-hub
 
-Unified web search + content extraction extension for [pi](https://pi.dev) with **17 backend providers** (all working). One `web_search` tool, one `web_read` tool (Jina or Sofya reader), auto-fallback, RRF-ranked combine mode, and credential resolution via env/shell/literal.
+Unified web search + content extraction extension for [pi](https://pi.dev) with **17 backend providers** (all working). One `web_search` tool, one `web_read` tool (Trafilatura by default, plus Jina or Sofya readers), auto-fallback, RRF-ranked combine mode, and credential resolution via env/shell/literal.
 
 ## Installation
 
@@ -12,6 +12,11 @@ pi install npm:pi-search-hub
 >
 > - Linux/macOS: `pip3 install ddgs`
 > - Windows: `pip install ddgs`
+>
+> **Note for Trafilatura web_read reader:** Requires the `trafilatura` Python package. Install with:
+>
+> - Linux/macOS: `pip3 install trafilatura`
+> - Windows: `pip install trafilatura`
 
 ## Usage
 
@@ -53,7 +58,7 @@ Search for "Rust vs Go performance benchmarks" with combine=true to get results 
 ### Read Web Pages
 
 Fetch any URL as clean markdown — great for extracting article content, docs, or reference pages.
-**Note: `web_read` uses [Jina Reader](https://r.jina.ai/) to fetch and convert URLs to markdown.**
+**Note: `web_read` defaults to a local Trafilatura CLI reader, and can also use Jina Reader or Sofya.**
 
 ```text
 Read https://docs.example.com/api-reference
@@ -64,6 +69,7 @@ The `web_read` tool supports:
 - **keywords** — relevant terms to highlight on long pages
 - **mode** — `rush` for speed (return innerText) or `smart` (markdown extraction)
 - **fresh** — bypass cache when freshness matters
+- **reader** — `trafilatura` (default, local CLI), `jina` (free), or `sofya` (API key)
 
 ## Supported Backends
 
@@ -102,6 +108,8 @@ The `web_read` tool supports:
 > **Exa** (March 2026) includes content for the first 10 results per request at no extra cost. Content extraction is enabled by default.
 >
 > **Sofya** provides both search and fetch (web_read reader) from a single API key. The fetch reader uses 250+ site-specific parsers for clean markdown extraction.
+> 
+> **Trafilatura** is the default local `web_read` reader. It requires the Python CLI on PATH (`pip install trafilatura`) and does not need an API key.
 
 ## Configuration
 

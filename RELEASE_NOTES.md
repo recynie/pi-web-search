@@ -2,7 +2,7 @@
 
 ## 🚀 New
 - **Sofya** ([sofya.co](https://sofya.co)): adds a `web_search` backend (`POST /v1/search`, full extracted page content at `basic` depth) AND a `web_read` reader (`POST /v1/fetch`, 250+ site-specific parsers), both from a single API key.
-- **Pluggable `web_read` reader**: `web_read` is no longer hardcoded to Jina. Choose `jina` (default, free) or `sofya` via the new top-level `"reader"` config setting, or per-call with the `reader` tool param.
+- **Pluggable `web_read` reader**: `web_read` is no longer hardcoded to Jina. Choose `trafilatura` (default, local CLI), `jina` (free), or `sofya` via the top-level `"reader"` config setting, or per-call with the `reader` tool param.
 
 ## 📊 Stats
 - 17 backends total (was 16)

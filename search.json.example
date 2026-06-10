@@ -1,6 +1,6 @@
 {
   "defaultBackend": "auto",
-  "reader": "jina",
+  "reader": "trafilatura",
   "showStatus": true,
   "backends": {
     "duckduckgo": { "enabled": true },

@@ -37,8 +37,8 @@ export interface SearchConfig {
 	defaultBackend?: string;
 	combine?: boolean;
 	selectionStrategy?: "sequential" | "random" | "round-robin" | "best-latency";
-	/** Reader backend for web_read. "jina" (default, free) or "sofya" (250+ site parsers, needs key). */
-	reader?: "jina" | "sofya";
+	/** Reader backend for web_read. "trafilatura" (default, local CLI), "jina" (free), or "sofya" (250+ site parsers, needs key). */
+	reader?: "jina" | "sofya" | "trafilatura";
 	/** Show status line with enabled backends. Default: true. Set to false to hide. */
 	showStatus?: boolean;
 	/** Cache TTL in milliseconds. Default: 300000 (5 min). Set to 0 to disable. */

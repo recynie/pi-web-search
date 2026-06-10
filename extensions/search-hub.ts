@@ -47,6 +47,7 @@ import type { BackendConfig, SearchConfig, SearchResult, SearchResultWithBackend
 import { getAgentDir, timeoutSignal, sanitizeError, formatFetchError, clearCooldowns, MISSING_KEY_HELP } from "./utils.js";
 import { resolveBackendKey, getKeySource } from "./credentials.js";
 import { fetchSofya } from "./backends/sofya.js";
+import { fetchTrafilatura } from "./backends/trafilatura.js";
 import { config, refreshConfig, getActiveBackends, recordLatency, latencyMap } from "./config.js";
 import { BACKEND_DEFS, runBackend } from "./backends/registry.js";
 import { selectBackendsForFallback, reciprocalRankFusion } from "./dispatch.js";
@@ -248,7 +249,7 @@ export default function (pi: ExtensionAPI) {
 		label: "Read Web Page",
 		description:
 			"Fetch a URL as markdown. Use keywords for long pages, rush for speed, smart for better narrowing. " +
-			"Use reader param to switch between Jina (default, free) and Sofya (250+ site parsers, needs API key).",
+			"Use reader param to switch between Trafilatura (default, local CLI), Jina (free), or Sofya (250+ site parsers, needs API key).",
 		promptSnippet: "Read content from a web page (supports markdown extraction)",
 		promptGuidelines: [
 			"Use web_read when you need to read the content of a specific URL",
@@ -275,10 +276,11 @@ export default function (pi: ExtensionAPI) {
 				}),
 			),
 			reader: Type.Optional(
-				StringEnum(["jina", "sofya"] as const, {
+				StringEnum(["jina", "sofya", "trafilatura"] as const, {
 					description:
-						"Reader backend: 'jina' (default, free, supports keywords/mode) or " +
-						"'sofya' (250+ site-specific parsers, needs API key). Overrides the configured default.",
+						"Reader backend: 'trafilatura' (default, local CLI, no API key), " +
+						"'jina' (free, supports keywords/mode), or " +
+						"'sofya' (250+ site-specific parsers, needs API key). Overrides the configured default."
 				}),
 			),
 		}),
@@ -289,7 +291,7 @@ export default function (pi: ExtensionAPI) {
 				? params.url
 				: `https://${params.url}`;
 
-			const reader = params.reader ?? config.reader ?? "jina";
+			const reader = params.reader ?? config.reader ?? "trafilatura";
 
 			let content: string;
 			if (reader === "sofya") {
@@ -299,6 +301,10 @@ export default function (pi: ExtensionAPI) {
 					throw new Error(`Sofya reader selected but no API key configured. ${MISSING_KEY_HELP}`);
 				}
 				const result = await fetchSofya(url, sofyaKey, signal);
+				content = result.content;
+			} else if (reader === "trafilatura") {
+				// Trafilatura Reader: local CLI extraction, no API key.
+				const result = await fetchTrafilatura(url, signal);
 				content = result.content;
 			} else {
 				// Jina Reader: free, supports keywords and mode hints.
