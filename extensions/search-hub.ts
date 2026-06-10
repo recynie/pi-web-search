@@ -44,7 +44,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
 import type { BackendConfig, SearchConfig, SearchResult, SearchResultWithBackend } from "./types.js";
-import { getAgentDir, timeoutSignal, sanitizeError, clearCooldowns, MISSING_KEY_HELP } from "./utils.js";
+import { getAgentDir, timeoutSignal, sanitizeError, formatFetchError, clearCooldowns, MISSING_KEY_HELP } from "./utils.js";
 import { resolveBackendKey, getKeySource } from "./credentials.js";
 import { fetchSofya } from "./backends/sofya.js";
 import { config, refreshConfig, getActiveBackends, recordLatency, latencyMap } from "./config.js";
@@ -247,13 +247,13 @@ export default function (pi: ExtensionAPI) {
 		name: "web_read",
 		label: "Read Web Page",
 		description:
-			"Fetch a URL as markdown. Use objective for a concrete question, keywords for long pages, " +
+			"Fetch a URL as markdown. Use objective for a CSS selector, keywords for long pages, " +
 			"rush for speed, smart for better narrowing. Use reader param to switch between " +
 			"Jina (default, free) and Sofya (250+ site parsers, needs API key).",
 		promptSnippet: "Read content from a web page (supports markdown extraction)",
 		promptGuidelines: [
 			"Use web_read when you need to read the content of a specific URL",
-			"Set objective for a concrete question when only part of the page matters",
+			"Set objective to a CSS selector when only part of the page matters",
 			"Add keywords for long pages when you know the relevant terms",
 			"Choose rush for speed or smart for higher-quality narrowing",
 		],
@@ -309,7 +309,7 @@ export default function (pi: ExtensionAPI) {
 				const result = await fetchSofya(url, sofyaKey, signal);
 				content = result.content;
 			} else {
-				// Jina Reader: free, supports keywords / mode / objective hints.
+				// Jina Reader: free, supports keywords / mode / CSS selector targeting.
 				const readerUrl = new URL("https://r.jina.ai/" + url);
 
 				const headers: Record<string, string> = {
@@ -335,10 +335,15 @@ export default function (pi: ExtensionAPI) {
 					headers["x-target-selector"] = params.objective;
 				}
 
-				const response = await fetch(readerUrl.toString(), {
-					signal: timeoutSignal(signal),
-					headers,
-				});
+				let response: Response;
+				try {
+					response = await fetch(readerUrl.toString(), {
+						signal: timeoutSignal(signal),
+						headers,
+					});
+				} catch (error) {
+					throw new Error(`Failed to read ${url}: ${formatFetchError(error)}`);
+				}
 
 				if (!response.ok) {
 					const text = await response.text().catch(() => "");

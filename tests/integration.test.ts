@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { reciprocalRankFusion, selectBackendsForFallback } from "../extensions/dispatch.js";
 import { resolveConfigValue, clearCredentialCache } from "../extensions/credentials.js";
 import { loadConfig } from "../extensions/config.js";
-import { SearchCache } from "../extensions/utils.js";
+import { SearchCache, formatFetchError } from "../extensions/utils.js";
 
 // ---------------------------------------------------------------------------
 // RRF combiner tests
@@ -284,6 +284,30 @@ describe("fetchSofya", () => {
 		const result = await fetchSofya("https://example.com", "valid-key");
 		expect(result.content).toBe("Page content here");
 		expect(result.title).toBe("Example");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// SearchCache tests
+// ---------------------------------------------------------------------------
+
+describe("formatFetchError", () => {
+	it("includes top-level and cause details", () => {
+		const message = formatFetchError({
+			message: "fetch failed",
+			cause: {
+				code: "UND_ERR_CONNECT_TIMEOUT",
+				message: "Connect Timeout Error",
+			},
+		});
+
+		expect(message).toContain("fetch failed");
+		expect(message).toContain("UND_ERR_CONNECT_TIMEOUT");
+		expect(message).toContain("Connect Timeout Error");
+	});
+
+	it("falls back to unknown fetch error", () => {
+		expect(formatFetchError({})).toBe("unknown fetch error");
 	});
 });
 

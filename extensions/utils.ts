@@ -139,3 +139,30 @@ export function sanitizeError(status: number, text: string): string {
 		.slice(0, 300);
 	return `API error (${status}): ${safe}`;
 }
+
+export function formatFetchError(error: unknown): string {
+	const err = error as { message?: string; name?: string; cause?: { code?: string; message?: string } };
+	const details: string[] = [];
+
+	if (typeof err?.message === "string" && err.message.length > 0) {
+		details.push(err.message);
+	}
+
+	if (typeof err?.cause?.code === "string" && err.cause.code.length > 0) {
+		details.push(err.cause.code);
+	}
+
+	if (
+		typeof err?.cause?.message === "string" &&
+		err.cause.message.length > 0 &&
+		err.cause.message !== err.message
+	) {
+		details.push(err.cause.message);
+	}
+
+	if (details.length === 0 && typeof err?.name === "string" && err.name.length > 0) {
+		details.push(err.name);
+	}
+
+	return details.join(": ") || "unknown fetch error";
+}
