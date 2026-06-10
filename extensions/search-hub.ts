@@ -430,7 +430,7 @@ export default function (pi: ExtensionAPI) {
 			};
 		},
 		renderResult(result, { expanded }, theme) {
-			const details = result.details as { url: string; reader: string; length: number; truncated: boolean } | undefined;
+			const details = result.details as { url: string; reader: string; length: number; truncated: boolean; tempPath?: string } | undefined;
 			const text = result.content[0];
 			const raw = text?.type === "text" ? text.text : "";
 			if (!details) return new Text(raw, 0, 0);
