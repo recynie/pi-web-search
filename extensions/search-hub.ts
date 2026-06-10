@@ -39,6 +39,8 @@
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { keyHint } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
@@ -272,22 +274,36 @@ export default function (pi: ExtensionAPI) {
 	// Tool: web_read — Read/extract content from a URL
 	// -----------------------------------------------------------------------
 
+	const WEB_READ_DEFAULT_MAX_CHARS = 10_000;
+
 	if (config.enableWebRead !== false) pi.registerTool({
 		name: "web_read",
 		label: "Read Web Page",
 		description:
 			"Fetch a URL as markdown. Use keywords for long pages, rush for speed, smart for better narrowing. " +
-			"Use reader param to switch between Trafilatura (default, local CLI), Jina (free), or Sofya (250+ site parsers, needs API key).",
+			"Use reader param to switch between Trafilatura (default, local CLI), Jina (free), or Sofya (250+ site parsers, needs API key). " +
+			"Output is truncated to " + WEB_READ_DEFAULT_MAX_CHARS.toLocaleString() + " chars by default. " +
+			"Use maxChars to override. When truncated, full content is saved to a temp file and its path is shown.",
 		promptSnippet: "Read content from a web page (supports markdown extraction)",
 		promptGuidelines: [
 			"Use web_read when you need to read the content of a specific URL",
 			"Add keywords for long pages when you know the relevant terms",
 			"Choose rush for speed or smart for higher-quality narrowing",
+			"Set maxChars to control truncation threshold, or set PI_WEB_READ_MAX_CHARS env var globally",
+			"When truncated, full content is saved to a temp file; use read to inspect it",
 		],
 		parameters: Type.Object({
 			url: Type.String({
 				description: "HTTP(S) URL or bare domain to fetch",
 			}),
+			maxChars: Type.Optional(
+				Type.Number({
+					description:
+						"Maximum characters to return. Default: " + WEB_READ_DEFAULT_MAX_CHARS.toLocaleString() + ". " +
+						"Override via PI_WEB_READ_MAX_CHARS env var. When truncated, full content is saved to a temp file.",
+					default: WEB_READ_DEFAULT_MAX_CHARS,
+				}),
+			),
 			fresh: Type.Optional(
 				Type.Boolean({
 					description: "Bypass cache when freshness matters",
@@ -320,6 +336,12 @@ export default function (pi: ExtensionAPI) {
 				: `https://${params.url}`;
 
 			const reader = params.reader ?? config.reader ?? "trafilatura";
+
+			// Determine maxChars: explicit param > PI_WEB_READ_MAX_CHARS env var > default
+			const envMaxChars = process.env.PI_WEB_READ_MAX_CHARS
+				? parseInt(process.env.PI_WEB_READ_MAX_CHARS, 10)
+				: undefined;
+			const maxChars = params.maxChars ?? envMaxChars ?? WEB_READ_DEFAULT_MAX_CHARS;
 
 			let content: string;
 			if (reader === "sofya") {
@@ -376,9 +398,25 @@ export default function (pi: ExtensionAPI) {
 				content = await response.text();
 			}
 
-			const truncated = content.length > 10000
-				? content.slice(0, 10000) + `\n\n[... truncated, full length: ${content.length} chars]`
-				: content;
+			const isTruncated = maxChars > 0 && content.length > maxChars;
+
+			let truncated: string;
+			let tempPath: string | undefined;
+
+			if (isTruncated) {
+				// Save full content to temp file (like built-in read tool)
+				const tmpDir = tmpdir();
+				const safeDomain = url.replace(/^https?:\/\//, "").replace(/[^a-zA-Z0-9.-]/g, "_");
+				const fileName = `pi-web-read-${safeDomain}-${randomUUID().slice(0, 8)}.md`;
+				tempPath = join(tmpDir, fileName);
+				writeFileSync(tempPath, content, "utf-8");
+
+				truncated = content.slice(0, maxChars) +
+					`\n\n[... truncated, full length: ${content.length} chars]\n` +
+					`[Full content saved to: ${tempPath}]\n`;
+			} else {
+				truncated = content;
+			}
 
 			return {
 				content: [{ type: "text", text: truncated }],
@@ -386,7 +424,8 @@ export default function (pi: ExtensionAPI) {
 					url,
 					reader,
 					length: content.length,
-					truncated: content.length > 10000,
+					truncated: isTruncated,
+					tempPath,
 				},
 			};
 		},
