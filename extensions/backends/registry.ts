@@ -104,7 +104,7 @@ export const BACKEND_DEFS: Record<string, BackendRunner> = {
 		setupLabel: "Exa (AI-native, 1000 free/mo)",
 		search: async (query, numResults, { key, signal }) => {
 			const result = await searchExa(query, numResults, key!, signal);
-			return { results: result.results };
+			return { results: result.results, warning: result.warning };
 		},
 	},
 	brave: {
