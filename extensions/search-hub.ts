@@ -252,11 +252,12 @@ export default function (pi: ExtensionAPI) {
 			const raw = text?.type === "text" ? text.text : "";
 			if (!details) return new Text(raw, 0, 0);
 
+			const hint = keyHint("app.tools.expand", "expand");
+			const errorMark = details.errors?.length
+				? theme.fg("warning", " [some backends failed]")
+				: "";
+
 			if (!expanded) {
-				const hint = keyHint("app.tools.expand", "expand");
-				const errorMark = details.errors?.length
-					? theme.fg("warning", " [some backends failed]")
-					: "";
 				return new Text(
 					theme.fg("success", `✓ ${details.resultCount} result${details.resultCount === 1 ? "" : "s"}`) +
 					theme.fg("muted", ` via ${details.backend}`) +
@@ -266,7 +267,33 @@ export default function (pi: ExtensionAPI) {
 				);
 			}
 
-			return new Text(raw, 0, 0);
+			// Expanded: render compact list instead of full markdown
+			const lines: string[] = [];
+			if (details.errors?.length) {
+				for (const err of details.errors) {
+					lines.push(theme.fg("warning", `⚠ ${err}`));
+				}
+				lines.push("");
+			}
+
+			// Extract results from raw for compact listing
+			const resultPattern = /### \d+\.\s+(.+?)\n\s*URL:\s+(\S+)/g;
+			let match;
+			let idx = 0;
+			while ((match = resultPattern.exec(raw)) !== null) {
+				idx++;
+				const title = match[1].replace(/\*Source:.*?\*\n\s*/, "").trim();
+				const url = match[2];
+				lines.push(`${idx}. ${theme.fg("accent", title.slice(0, 60))}`);
+				lines.push(`   ${theme.fg("muted", url)}`);
+			}
+
+			// Fallback: show raw if parsing failed
+			if (idx === 0) return new Text(raw, 0, 0);
+
+			lines.push("");
+			lines.push(theme.fg("dim", `(${hint} to collapse)`));
+			return new Text(lines.join("\n"), 0, 0);
 		},
 	});
 
@@ -436,7 +463,7 @@ export default function (pi: ExtensionAPI) {
 			if (!details) return new Text(raw, 0, 0);
 
 			const url = details.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-			const shortUrl = url.length > 50 ? url.slice(0, 50) + "…" : url;
+			const shortUrl = url;
 			const sizeKb = Math.round(details.length / 1024);
 			const truncMark = details.truncated ? theme.fg("warning", " [truncated]") : "";
 
