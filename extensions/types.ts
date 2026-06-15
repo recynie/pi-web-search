@@ -37,8 +37,13 @@ export interface SearchConfig {
 	defaultBackend?: string;
 	combine?: boolean;
 	selectionStrategy?: "sequential" | "random" | "round-robin" | "best-latency";
-	/** Reader backend for web_read. "trafilatura" (default, local CLI), "jina" (free), or "sofya" (250+ site parsers, needs key). */
-	reader?: "jina" | "sofya" | "trafilatura";
+	/**
+	 * Priority-ordered list of reader backends for web_read.
+	 * When no `reader` parameter is passed, web_read tries readers in this order
+	 * until one succeeds. If unset, behaves as ["trafilatura"] (single-reader mode,
+	 * no fallback). Can omit any reader — only listed ones are tried.
+	 */
+	readerPriority?: ("jina" | "sofya" | "trafilatura")[];
 	/** Show status line with enabled backends. Default: true. Set to false to hide. */
 	showStatus?: boolean;
 	/** Enable the web_search tool. Default: true. */

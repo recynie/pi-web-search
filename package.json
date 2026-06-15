@@ -1,7 +1,7 @@
 {
   "name": "pi-search-hub",
-  "version": "2.2.1",
-  "description": "Unified web search + content extraction extension for pi with 17 backends (DuckDuckGo, Jina AI, Tavily, Brave, Brave LLM, Exa, Serper, Firecrawl, fastCRW, Marginalia, LangSearch, Linkup, Perplexity Sonar, SearXNG, WebSearchAPI, You.com, Sofya). Auto-fallback, RRF combine mode, web_read defaults to Trafilatura with Jina/Sofya alternatives, secure credential resolution.",
+  "version": "2.3.0",
+  "description": "Unified web search + content extraction extension for pi with 17 backends (DuckDuckGo, Jina AI, Tavily, Brave, Brave LLM, Exa, Serper, Firecrawl, fastCRW, Marginalia, LangSearch, Linkup, Perplexity Sonar, SearXNG, WebSearchAPI, You.com, Sofya). Auto-fallback, RRF combine mode, web_read with readerPriority fallback, secure credential resolution.",
   "keywords": [
     "pi-package",
     "pi",

@@ -1,6 +1,6 @@
 {
   "defaultBackend": "auto",
-  "reader": "trafilatura",
+  "readerPriority": ["trafilatura", "jina", "sofya"],
   "showStatus": true,
   "enableWebSearch": true,
   "enableWebRead": true,

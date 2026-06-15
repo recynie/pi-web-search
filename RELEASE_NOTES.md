@@ -1,21 +1,32 @@
-# Release v2.2.0 (Sofya backend + pluggable web_read reader)
+# Release v2.3.0 (web_read reader fallback with readerPriority)
 
 ## 🚀 New
 - **Sofya** ([sofya.co](https://sofya.co)): adds a `web_search` backend (`POST /v1/search`, full extracted page content at `basic` depth) AND a `web_read` reader (`POST /v1/fetch`, 250+ site-specific parsers), both from a single API key.
 - **Pluggable `web_read` reader**: `web_read` is no longer hardcoded to Jina. Choose `trafilatura` (default, local CLI), `jina` (free), or `sofya` via the top-level `"reader"` config setting, or per-call with the `reader` tool param.
 
-## 📊 Stats
-- 17 backends total (was 16)
-- 70 tests passing (was 65), added `parseSofya` coverage
+## 🚀 New
+- **Reader fallback with `readerPriority`**: `web_read` now supports a priority-ordered reader fallback list in `search.json`. When no explicit `reader` parameter is passed, readers are tried in `readerPriority` order until one succeeds.
+- **`readerPriority` config**: Replaces the top-level `reader` setting. Example: `"readerPriority": ["trafilatura", "jina", "sofya"]`. Unset → single Trafilatura (no fallback, same as before).
+- **Explicit `reader` param**: When passed, only that reader is used — no fallback.
+- **Rendered result**: Failed readers are shown in both collapsed (`⚠ [reader failed: jina]`) and expanded (error preamble) views.
+
+## 🔧 Breaking
+- Removed top-level `"reader"` config setting. Use `"readerPriority"` instead.
 
 ## 🔧 Changes
-- `extensions/backends/sofya.ts`: New adapter exporting `searchSofya` + `fetchSofya`.
-- `parsers.ts`: Added `parseSofya` (full `content` + `description` snippet).
-- `registry.ts`: Registered `sofya` BACKEND_DEF (honors `searchDepth`, `topic`).
-- `types.ts`: Added `sofya` to SearchConfig, top-level `reader`, and `searchDepth`/`topic` per-backend options.
-- `credentials.ts`: Added `SEARCH_SOFYA_API_KEY` convenience env var.
-- `search-hub.ts`: `web_read` branches on reader (Jina vs Sofya Fetch); `web_search` backend enum completed (added the 4 v2.1.0 backends that were missing from the enum, plus `sofya`).
-- `package.json`: Description/keywords updated to 17 backends.
+- `types.ts`: Removed `reader` from `SearchConfig`. Added `readerPriority?: ("jina" | "sofya" | "trafilatura")[]`.
+- `search-hub.ts`: Extracted `fetchWithReader()` helper. `web_read.execute` loops through readers with fallback. `renderResult` shows failed readers in collapsed/expanded views.
+- `search.json.example`: Updated to `readerPriority`.
+- `README.md`: Documented readerPriority, updated config example.
+- `tests/web-read.test.ts`: 12 tests covering single-reader, priority fallback, partial priority, explicit param override, and aggregated error cases.
+
+## 📊 Stats
+- 12 new web-read tests (total: 82)
+- Backend count unchanged (17)
+
+---
+
+# Release v2.2.0 (Sofya backend + pluggable web_read reader)
 
 ---
 

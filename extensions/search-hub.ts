@@ -303,12 +303,71 @@ export default function (pi: ExtensionAPI) {
 
 	const WEB_READ_DEFAULT_MAX_CHARS = 10_000;
 
+	/** Shared helper: fetch content from a single reader backend. */
+	async function fetchWithReader(
+		reader: string,
+		url: string,
+		signal: AbortSignal | undefined,
+		params: { fresh?: boolean; keywords?: string[]; mode?: string },
+	): Promise<string> {
+		if (reader === "sofya") {
+			const sofyaKey = resolveBackendKey("sofya", config);
+			if (!sofyaKey) {
+				throw new Error(`Sofya reader selected but no API key configured. ${MISSING_KEY_HELP}`);
+			}
+			const result = await fetchSofya(url, sofyaKey, signal);
+			return result.content;
+		}
+
+		if (reader === "trafilatura") {
+			const result = await fetchTrafilatura(url, signal);
+			return result.content;
+		}
+
+		// Jina Reader: free, supports keywords and mode hints.
+		const readerUrl = new URL("https://r.jina.ai/" + url);
+		const headers: Record<string, string> = {
+			"Accept": "text/plain",
+		};
+		const jinaKey = resolveBackendKey("jina", config);
+		if (jinaKey) {
+			headers["Authorization"] = `Bearer ${jinaKey}`;
+		}
+		if (params.fresh) {
+			headers["x-no-cache"] = "true";
+		}
+		if (params.keywords && params.keywords.length > 0) {
+			headers["x-keywords"] = params.keywords.join(", ");
+		}
+		if (params.mode) {
+			headers["x-respond-with"] = params.mode === "rush" ? "text" : "markdown";
+		}
+
+		let response: Response;
+		try {
+			response = await fetch(readerUrl.toString(), {
+				signal: timeoutSignal(signal),
+				headers,
+			});
+		} catch (error) {
+			throw new Error(`Failed to read ${url}: ${formatFetchError(error)}`);
+		}
+
+		if (!response.ok) {
+			const text = await response.text().catch(() => "");
+			throw new Error(`Failed to read ${url}: ${sanitizeError(response.status, text)}`);
+		}
+
+		return await response.text();
+	}
+
 	if (config.enableWebRead !== false) pi.registerTool({
 		name: "web_read",
 		label: "Read Web Page",
 		description:
 			"Fetch a URL as markdown. Use keywords for long pages, rush for speed, smart for better narrowing. " +
-			"Use reader param to switch between Trafilatura (default, local CLI), Jina (free), or Sofya (250+ site parsers, needs API key). " +
+			"Use reader param to switch between Trafilatura (local CLI, no key), Jina (free), or Sofya (250+ site parsers, needs API key). " +
+			"When omitted, falls back to readerPriority from config. " +
 			"Output is truncated to " + WEB_READ_DEFAULT_MAX_CHARS.toLocaleString() + " chars by default. " +
 			"Use maxChars to override. When truncated, full content is saved to a temp file and its path is shown.",
 		promptSnippet: "Read content from a web page (supports markdown extraction)",
@@ -318,6 +377,7 @@ export default function (pi: ExtensionAPI) {
 			"Choose rush for speed or smart for higher-quality narrowing",
 			"Set maxChars to control truncation threshold, or set PI_WEB_READ_MAX_CHARS env var globally",
 			"When truncated, full content is saved to a temp file; use read to inspect it",
+			"Configure readerPriority in search.json for automatic fallback between readers",
 		],
 		parameters: Type.Object({
 			url: Type.String({
@@ -349,9 +409,9 @@ export default function (pi: ExtensionAPI) {
 			reader: Type.Optional(
 				StringEnum(["jina", "sofya", "trafilatura"] as const, {
 					description:
-						"Reader backend: 'trafilatura' (default, local CLI, no API key), " +
-						"'jina' (free, supports keywords/mode), or " +
-						"'sofya' (250+ site-specific parsers, needs API key). Overrides the configured default."
+						"Reader backend. Overrides the configured readerPriority. " +
+						"'trafilatura' (local CLI, no key), 'jina' (free), " +
+						"or 'sofya' (250+ site parsers, needs API key)."
 				}),
 			),
 		}),
@@ -362,123 +422,114 @@ export default function (pi: ExtensionAPI) {
 				? params.url
 				: `https://${params.url}`;
 
-			const reader = params.reader ?? config.reader ?? "trafilatura";
-
 			// Determine maxChars: explicit param > PI_WEB_READ_MAX_CHARS env var > default
 			const envMaxChars = process.env.PI_WEB_READ_MAX_CHARS
 				? parseInt(process.env.PI_WEB_READ_MAX_CHARS, 10)
 				: undefined;
 			const maxChars = params.maxChars ?? envMaxChars ?? WEB_READ_DEFAULT_MAX_CHARS;
 
-			let content: string;
-			if (reader === "sofya") {
-				// Sofya Fetch: clean markdown via 250+ site-specific parsers.
-				const sofyaKey = resolveBackendKey("sofya", config);
-				if (!sofyaKey) {
-					throw new Error(`Sofya reader selected but no API key configured. ${MISSING_KEY_HELP}`);
-				}
-				const result = await fetchSofya(url, sofyaKey, signal);
-				content = result.content;
-			} else if (reader === "trafilatura") {
-				// Trafilatura Reader: local CLI extraction, no API key.
-				const result = await fetchTrafilatura(url, signal);
-				content = result.content;
-			} else {
-				// Jina Reader: free, supports keywords and mode hints.
-				const readerUrl = new URL("https://r.jina.ai/" + url);
+			// Determine reader list:
+			// - If explicit reader param was passed, use it alone (no fallback).
+			// - Otherwise, use readerPriority from config; if unset, default to ["trafilatura"].
+			const readers: string[] = params.reader
+				? [params.reader]
+				: (config.readerPriority?.length ? config.readerPriority : ["trafilatura"]);
 
-				const headers: Record<string, string> = {
-					"Accept": "text/plain",
-				};
-
-				// Optional Jina API key for higher rate limits (fallback to no-auth)
-				const jinaKey = resolveBackendKey("jina", config);
-				if (jinaKey) {
-					headers["Authorization"] = `Bearer ${jinaKey}`;
-				}
-
-				if (params.fresh) {
-					headers["x-no-cache"] = "true";
-				}
-				if (params.keywords && params.keywords.length > 0) {
-					headers["x-keywords"] = params.keywords.join(", ");
-				}
-				if (params.mode) {
-					headers["x-respond-with"] = params.mode === "rush" ? "text" : "markdown";
-				}
-
-				let response: Response;
-				try {
-					response = await fetch(readerUrl.toString(), {
-						signal: timeoutSignal(signal),
-						headers,
-					});
-				} catch (error) {
-					throw new Error(`Failed to read ${url}: ${formatFetchError(error)}`);
-				}
-
-				if (!response.ok) {
-					const text = await response.text().catch(() => "");
-					throw new Error(`Failed to read ${url}: ${sanitizeError(response.status, text)}`);
-				}
-
-				content = await response.text();
-			}
-
-			const isTruncated = maxChars > 0 && content.length > maxChars;
-
-			let truncated: string;
-			let tempPath: string | undefined;
-
-			if (isTruncated) {
-				// Save full content to temp file (like built-in read tool)
+			// Truncation helper (shared across all branches)
+			const truncate = (content: string) => {
+				const isTruncated = maxChars > 0 && content.length > maxChars;
+				if (!isTruncated) return { truncated: content, tempPath: undefined as string | undefined, isTruncated };
 				const tmpDir = tmpdir();
 				const safeDomain = url.replace(/^https?:\/\//, "").replace(/[^a-zA-Z0-9.-]/g, "_");
 				const fileName = `pi-web-read-${safeDomain}-${randomUUID().slice(0, 8)}.md`;
-				tempPath = join(tmpDir, fileName);
+				const tempPath = join(tmpDir, fileName);
 				writeFileSync(tempPath, content, "utf-8");
+				return {
+					truncated: content.slice(0, maxChars) +
+						`\n\n[... truncated, full length: ${content.length} chars]\n` +
+						`[Full content saved to: ${tempPath}]\n`,
+					tempPath,
+					isTruncated,
+				};
+			};
 
-				truncated = content.slice(0, maxChars) +
-					`\n\n[... truncated, full length: ${content.length} chars]\n` +
-					`[Full content saved to: ${tempPath}]\n`;
-			} else {
-				truncated = content;
+			const errors: Array<{ reader: string; cause: string }> = [];
+
+			for (const reader of readers) {
+				try {
+					const content = await fetchWithReader(reader, url, signal, params);
+					const { truncated, tempPath, isTruncated } = truncate(content);
+					return {
+						content: [{ type: "text", text: truncated }],
+						details: {
+							url,
+							reader,
+							length: content.length,
+							truncated: isTruncated,
+							tempPath,
+							fallbackErrors: errors.length > 0 ? errors : undefined,
+						},
+					};
+				} catch (err) {
+					errors.push({ reader, cause: (err as Error).message });
+					// If only one reader in list, no fallback — rethrow directly
+					if (readers.length === 1) {
+						throw err;
+					}
+				}
 			}
 
-			return {
-				content: [{ type: "text", text: truncated }],
-				details: {
-					url,
-					reader,
-					length: content.length,
-					truncated: isTruncated,
-					tempPath,
-				},
-			};
+			// All readers failed
+			throw new Error(`All web readers failed for ${url}. ` +
+				errors.map(e => `${e.reader}: ${e.cause}`).join("; "));
 		},
 		renderResult(result, { expanded }, theme) {
-			const details = result.details as { url: string; reader: string; length: number; truncated: boolean; tempPath?: string } | undefined;
+			const details = result.details as {
+				url: string;
+				reader: string;
+				length: number;
+				truncated: boolean;
+				tempPath?: string;
+				fallbackErrors?: Array<{ reader: string; cause: string }>;
+			} | undefined;
 			const text = result.content[0];
 			const raw = text?.type === "text" ? text.text : "";
 			if (!details) return new Text(raw, 0, 0);
 
-			const url = details.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
-			const shortUrl = url;
+			const displayUrl = details.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 			const sizeKb = Math.round(details.length / 1024);
 			const truncMark = details.truncated ? theme.fg("warning", " [truncated]") : "";
+
+			// Build failure summary (deduplicated reader names)
+			const failedReaders = details.fallbackErrors
+				?.map(e => e.reader)
+				.filter((r, i, a) => a.indexOf(r) === i) ?? [];
+			const failureMark = failedReaders.length > 0
+				? " " + theme.fg("warning", `⚠ [reader failed: ${failedReaders.join(", ")}]`)
+				: "";
 
 			if (!expanded) {
 				const hint = keyHint("app.tools.expand", "expand");
 				return new Text(
-					theme.fg("accent", shortUrl) +
+					theme.fg("accent", displayUrl) +
 					theme.fg("muted", ` · ${sizeKb}KB via ${details.reader}`) +
 					truncMark +
+					failureMark +
 					theme.fg("dim", ` (${hint})`),
 					0, 0,
 				);
 			}
 
-			return new Text(raw, 0, 0);
+			// Expanded: render content with error preamble
+			let output = raw;
+			if (details.fallbackErrors?.length) {
+				const preamble = details.fallbackErrors
+					.map(e => `${theme.fg("warning", "⚠")} ${e.reader} failed: ${e.cause}`)
+					.join("\n");
+				output = preamble + "\n\n---\n\n" + raw;
+			}
+
+			return new Text(output, 0, 0);
 		},
 	});
 
