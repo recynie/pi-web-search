@@ -192,6 +192,72 @@ describe("web_read tool", () => {
 		);
 	});
 
+	it("explains trafilatura process failures when the CLI exits without output", async () => {
+		fetchSpy.mockResolvedValueOnce(new Response("missing", {
+			status: 404,
+			statusText: "Not Found",
+		}));
+		execFileMock.mockImplementation((_cmd: string, _args: string[], _opts: any, callback: Function) => {
+			const err = new Error("Command failed: trafilatura -u https://bad.example --markdown --no-comments");
+			(err as any).exitCode = 1;
+			(err as any).stdout = "";
+			(err as any).stderr = "";
+			callback(err, null);
+		});
+
+		const tools: Record<string, any> = {};
+		const extension = (await import("../extensions/search-hub.js")).default;
+		extension(fakeToolRegistration(tools));
+
+		await expect(tools.web_read.execute("call", {
+			url: "https://bad.example",
+		}, undefined, undefined, { cwd: process.cwd() })).rejects.toThrow(
+			"trafilatura CLI error (exit 1): no diagnostic output; likely URL download/HTTP/TLS failure or no extractable content; url check: API error (404): missing",
+		);
+	});
+
+	it("includes fetch error codes in trafilatura URL diagnostics", async () => {
+		fetchSpy.mockRejectedValueOnce(Object.assign(new Error("fetch failed"), {
+			cause: { code: "ENOTFOUND", message: "getaddrinfo ENOTFOUND bad.example" },
+		}));
+		execFileMock.mockImplementation((_cmd: string, _args: string[], _opts: any, callback: Function) => {
+			const err = new Error("Command failed: trafilatura");
+			(err as any).exitCode = 1;
+			callback(err, null);
+		});
+
+		const tools: Record<string, any> = {};
+		const extension = (await import("../extensions/search-hub.js")).default;
+		extension(fakeToolRegistration(tools));
+
+		await expect(tools.web_read.execute("call", {
+			url: "https://bad.example",
+		}, undefined, undefined, { cwd: process.cwd() })).rejects.toThrow(
+			"url check failed: fetch failed: ENOTFOUND: getaddrinfo ENOTFOUND bad.example",
+		);
+	});
+
+	it("explains empty trafilatura extraction separately from CLI failures", async () => {
+		fetchSpy.mockResolvedValueOnce(new Response("", {
+			status: 200,
+			statusText: "OK",
+			headers: { "content-type": "text/html" },
+		}));
+		execFileMock.mockImplementation((_cmd: string, _args: string[], _opts: any, callback: Function) => {
+			callback(null, { stdout: "\n", stderr: "" });
+		});
+
+		const tools: Record<string, any> = {};
+		const extension = (await import("../extensions/search-hub.js")).default;
+		extension(fakeToolRegistration(tools));
+
+		await expect(tools.web_read.execute("call", {
+			url: "https://example.com/empty",
+		}, undefined, undefined, { cwd: process.cwd() })).rejects.toThrow(
+			"url check: reachable (HTTP 200 OK, content-type: text/html)",
+		);
+	});
+
 	// -----------------------------------------------------------------------
 	// readerPriority: first succeeds
 	// -----------------------------------------------------------------------
@@ -267,7 +333,7 @@ describe("web_read tool", () => {
 		}, undefined, undefined, { cwd: process.cwd() })).rejects.toThrow(
 			"All web readers failed for https://example.com. " +
 			"jina: Failed to read https://example.com: Jina DNS error; " +
-			"trafilatura: Trafilatura failed for https://example.com: trafilatura not installed",
+			"trafilatura: Trafilatura failed for https://example.com: trafilatura CLI error: trafilatura not installed",
 		);
 	});
 
