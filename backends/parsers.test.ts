@@ -234,6 +234,14 @@ describe("parseSearXNG", () => {
 		const results = parseSearXNG(data, 10);
 		expect(results[0].snippet).toBe("content");
 	});
+
+	it("throws on missing results array", () => {
+		expect(() => parseSearXNG({}, 10)).toThrow("Malformed SearXNG response");
+	});
+
+	it("throws when results is not an array", () => {
+		expect(() => parseSearXNG({ results: "nope" }, 10)).toThrow("Malformed SearXNG response");
+	});
 });
 
 // ---------------------------------------------------------------------------

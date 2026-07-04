@@ -84,6 +84,11 @@ export interface SearchResult {
 	content?: string;
 }
 
+export interface BackendSearchResponse {
+	results: SearchResult[];
+	warning?: string;
+}
+
 export interface SearchResultWithBackend extends SearchResult {
 	backend?: string;
 }
@@ -99,5 +104,5 @@ export interface BackendRunner {
 		query: string,
 		numResults: number,
 		deps: { key?: string; instanceUrl?: string; signal?: AbortSignal; backendConfig?: BackendConfig },
-	) => Promise<{ results: SearchResult[] }>;
+	) => Promise<BackendSearchResponse>;
 }

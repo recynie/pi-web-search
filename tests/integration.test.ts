@@ -13,6 +13,7 @@ import { reciprocalRankFusion, selectBackendsForFallback } from "../extensions/d
 import { resolveConfigValue, clearCredentialCache } from "../extensions/credentials.js";
 import { loadConfig } from "../extensions/config.js";
 import { SearchCache, formatFetchError } from "../extensions/utils.js";
+import { searchSearXNG } from "../extensions/backends/searxng.js";
 
 // ---------------------------------------------------------------------------
 // RRF combiner tests
@@ -228,6 +229,45 @@ describe("loadConfig", () => {
 // ---------------------------------------------------------------------------
 
 import { fetchSofya } from "../extensions/backends/sofya.js";
+
+describe("searchSearXNG", () => {
+	let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		fetchSpy = vi.spyOn(global, "fetch");
+	});
+
+	afterEach(() => {
+		fetchSpy.mockRestore();
+	});
+
+	it("throws when no results are returned and engines are unresponsive", async () => {
+		fetchSpy.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				results: [],
+				unresponsive_engines: [["google", "timeout"]],
+			}),
+		} as Response);
+
+		await expect(searchSearXNG("test", 10, undefined, "http://localhost:8888"))
+			.rejects.toThrow("reported unresponsive engines");
+	});
+
+	it("returns a warning when results are present and some engines are unresponsive", async () => {
+		fetchSpy.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({
+				results: [{ title: "SX", url: "https://sx.com", content: "content" }],
+				unresponsive_engines: [["bing", "request exception"]],
+			}),
+		} as Response);
+
+		const response = await searchSearXNG("test", 10, undefined, "http://localhost:8888");
+		expect(response.results).toHaveLength(1);
+		expect(response.warning).toContain("bing");
+	});
+});
 
 describe("fetchSofya", () => {
 	let fetchSpy: ReturnType<typeof vi.spyOn>;

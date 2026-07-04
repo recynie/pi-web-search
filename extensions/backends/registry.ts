@@ -2,7 +2,7 @@
  * Backend registry and dispatcher for pi-search-hub extension.
  */
 
-import type { BackendRunner, BackendConfig, SearchResult } from "../types.js";
+import type { BackendRunner, BackendConfig, SearchResult, BackendSearchResponse } from "../types.js";
 import { MISSING_KEY_HELP, waitForCooldown, markCooldown, searchCache, cacheKey } from "../utils.js";
 import { resolveBackendKey } from "../credentials.js";
 import { config } from "../config.js";
@@ -252,13 +252,13 @@ export const BACKEND_DEFS: Record<string, BackendRunner> = {
 // Backend dispatcher
 // ---------------------------------------------------------------------------
 
-export async function runBackend(
+export async function runBackendDetailed(
 	backend: string,
 	query: string,
 	numResults: number,
 	signal?: AbortSignal,
 	options?: { skipCache?: boolean },
-): Promise<SearchResult[]> {
+): Promise<BackendSearchResponse> {
 	// Check cache first
 	const key = cacheKey(query, backend, numResults);
 	if (!options?.skipCache) {
@@ -298,9 +298,20 @@ export async function runBackend(
 		const bc = (config.backends as Record<string, BackendConfig> | undefined)?.[backend];
 		const result = await def.search(query, numResults, { key, instanceUrl, signal, backendConfig: bc });
 		// Cache the result
-		searchCache.set(cacheKey(query, backend, numResults), result.results);
-		return result.results;
+		searchCache.set(cacheKey(query, backend, numResults), result);
+		return result;
 	} finally {
 		markCooldown(backend);
 	}
+}
+
+export async function runBackend(
+	backend: string,
+	query: string,
+	numResults: number,
+	signal?: AbortSignal,
+	options?: { skipCache?: boolean },
+): Promise<SearchResult[]> {
+	const result = await runBackendDetailed(backend, query, numResults, signal, options);
+	return result.results;
 }

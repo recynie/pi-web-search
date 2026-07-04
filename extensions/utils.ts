@@ -3,6 +3,7 @@
  */
 
 import { join } from "node:path";
+import type { BackendSearchResponse } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -114,7 +115,7 @@ export class SearchCache<T> {
 }
 
 // Global search result cache instance
-export const searchCache = new SearchCache<Array<{ title: string; url: string; snippet?: string; content?: string }>>();
+export const searchCache = new SearchCache<BackendSearchResponse>();
 
 /** Build a cache key from query + backend + numResults. */
 export function cacheKey(query: string, backend: string, numResults: number): string {

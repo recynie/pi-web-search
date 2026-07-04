@@ -11,27 +11,31 @@ import type { BackendRunner } from "./types.js";
 
 export function formatResultsCompact(
 	results: SearchResult[],
+	warning?: string,
 ): string {
-	if (results.length === 0) return "No results.";
+	const warningLines = warning ? [`Warning: ${warning}`, ""] : [];
+	if (results.length === 0) return [...warningLines, "No results."].join("\n");
 	const lines = results.map((r, i) => {
 		const title = (r.title || "Untitled").slice(0, 60);
 		const url = r.url.length > 50 ? r.url.slice(0, 47) + "..." : r.url;
 		return `${i + 1}. ${title} — ${url}`;
 	});
-	return lines.join("\n");
+	return [...warningLines, ...lines].join("\n");
 }
 
 export function formatCombinedResultsCompact(
 	results: SearchResultWithBackend[],
+	warnings: string[] = [],
 ): string {
-	if (results.length === 0) return "No results.";
+	const warningLines = warnings.length > 0 ? [`Warnings: ${warnings.join("; ")}`, ""] : [];
+	if (results.length === 0) return [...warningLines, "No results."].join("\n");
 	const lines = results.map((r, i) => {
 		const title = (r.title || "Untitled").slice(0, 60);
 		const url = r.url.length > 50 ? r.url.slice(0, 47) + "..." : r.url;
 		const src = r.backend ? ` [${r.backend}]` : "";
 		return `${i + 1}. ${title}${src} — ${url}`;
 	});
-	return lines.join("\n");
+	return [...warningLines, ...lines].join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -42,6 +46,7 @@ export function formatResults(
 	query: string,
 	backend: string,
 	results: SearchResult[],
+	warning?: string,
 ): string {
 	// Escape newlines and markdown heading chars in query to prevent injection
 	const safeQuery = query.replace(/[\n\r]/g, " ").replace(/^#/gm, "\\#");
@@ -50,6 +55,10 @@ export function formatResults(
 		`Backend: ${backend}  ·  Results: ${results.length}`,
 		"",
 	];
+	if (warning) {
+		lines.push(`Warning: ${warning}`);
+		lines.push("");
+	}
 	for (let i = 0; i < results.length; i++) {
 		const r = results[i];
 		lines.push(`### ${i + 1}. ${r.title || "Untitled"}`);
@@ -71,7 +80,7 @@ export function formatResults(
 export function formatCombinedResults(
 	query: string,
 	results: SearchResultWithBackend[],
-	backendStats: Map<string, { success: boolean; count: number; error?: string }>,
+	backendStats: Map<string, { success: boolean; count: number; error?: string; warning?: string }>,
 	backendDefs: Record<string, BackendRunner>,
 ): string {
 	const safeQuery = query.replace(/[\n\r]/g, " ").replace(/^#/gm, "\\#");
@@ -90,7 +99,8 @@ export function formatCombinedResults(
 	for (const [backend, stats] of backendStats.entries()) {
 		const label = backendLabel[backend] || backend;
 		if (stats.success) {
-			lines.push(`  - ${label}: ${stats.count} results`);
+			const warning = stats.warning ? ` (warning: ${stats.warning})` : "";
+			lines.push(`  - ${label}: ${stats.count} results${warning}`);
 		} else {
 			lines.push(`  - ${label}: failed (${stats.error || "unknown error"})`);
 		}

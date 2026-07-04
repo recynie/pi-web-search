@@ -220,13 +220,18 @@ export function parseSearXNG(
 	data: Record<string, unknown>,
 	numResults: number,
 ): ParsedResult[] {
-	const rawResults = data.results as Array<Record<string, unknown>> | undefined;
-	const results = Array.isArray(rawResults) ? rawResults : [];
-	return results.slice(0, numResults).map((r) => ({
-		title: (r.title as string) || "",
-		url: (r.url as string) || "",
-		snippet: ((r.content as string) || (r.snippet as string) || "").slice(0, 500),
-	}));
+	const rawResults = data.results;
+	if (!Array.isArray(rawResults)) {
+		throw new Error("Malformed SearXNG response: expected 'results' array");
+	}
+	return rawResults.slice(0, numResults).map((r) => {
+		const result = (r && typeof r === "object") ? r as Record<string, unknown> : {};
+		return {
+			title: (result.title as string) || "",
+			url: (result.url as string) || "",
+			snippet: ((result.content as string) || (result.snippet as string) || "").slice(0, 500),
+		};
+	});
 }
 
 // ---------------------------------------------------------------------------

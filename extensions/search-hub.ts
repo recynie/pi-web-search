@@ -53,7 +53,7 @@ import { resolveBackendKey, getKeySource } from "./credentials.js";
 import { fetchSofya } from "./backends/sofya.js";
 import { fetchTrafilatura } from "./backends/trafilatura.js";
 import { config, refreshConfig, getActiveBackends, recordLatency, latencyMap } from "./config.js";
-import { BACKEND_DEFS, runBackend } from "./backends/registry.js";
+import { BACKEND_DEFS, runBackendDetailed } from "./backends/registry.js";
 import { selectBackendsForFallback, reciprocalRankFusion } from "./dispatch.js";
 import { formatResults, formatCombinedResults, formatResultsCompact, formatCombinedResultsCompact } from "./formatters.js";
 
@@ -136,10 +136,11 @@ export default function (pi: ExtensionAPI) {
 
 			if (requestedBackend !== "auto") {
 				// Specific backend requested — try it directly
-				const results = await runBackend(requestedBackend, params.query, numResults, signal);
+				const response = await runBackendDetailed(requestedBackend, params.query, numResults, signal);
+				const { results, warning } = response;
 				return {
-					content: [{ type: "text", text: compact ? formatResultsCompact(results) : formatResults(params.query, requestedBackend, results) }],
-					details: { backend: requestedBackend, resultCount: results.length },
+					content: [{ type: "text", text: compact ? formatResultsCompact(results, warning) : formatResults(params.query, requestedBackend, results, warning) }],
+					details: { backend: requestedBackend, resultCount: results.length, warning },
 				};
 			}
 
@@ -151,7 +152,7 @@ export default function (pi: ExtensionAPI) {
 				const resultsPerBackend = await Promise.all(
 					activeBackends.map(async (backend) => {
 						try {
-							const results = await runBackend(
+							const response = await runBackendDetailed(
 								backend,
 								params.query,
 								Math.ceil(numResults / activeBackends.length),
@@ -159,8 +160,9 @@ export default function (pi: ExtensionAPI) {
 							);
 							return {
 								backend,
-								results: results.map((r) => ({ ...r, backend })) as SearchResultWithBackend[],
+								results: response.results.map((r) => ({ ...r, backend })) as SearchResultWithBackend[],
 								success: true,
+								warning: response.warning,
 							};
 						} catch (err) {
 							return {
@@ -168,6 +170,7 @@ export default function (pi: ExtensionAPI) {
 								results: [] as SearchResultWithBackend[],
 								success: false,
 								error: (err as Error).message,
+								warning: undefined,
 							};
 						}
 					}),
@@ -176,14 +179,15 @@ export default function (pi: ExtensionAPI) {
 				// Build backend stats map
 				const backendStats = new Map<
 					string,
-					{ success: boolean; count: number; error?: string }
+					{ success: boolean; count: number; error?: string; warning?: string }
 				>();
 
-				for (const { backend, results, success, error } of resultsPerBackend) {
+				for (const { backend, results, success, error, warning } of resultsPerBackend) {
 					backendStats.set(backend, {
 						success,
 						count: results.length,
 						error,
+						warning,
 					});
 				}
 
@@ -196,12 +200,16 @@ export default function (pi: ExtensionAPI) {
 					? reciprocalRankFusion(successfulBackends, numResults)
 					: [];
 
+				const warnings = resultsPerBackend
+					.filter(r => r.warning)
+					.map(r => `${r.backend}: ${r.warning}`);
+
 				return {
 					content: [
 						{
 							type: "text",
 							text: compact
-								? formatCombinedResultsCompact(combined)
+								? formatCombinedResultsCompact(combined, warnings)
 							: formatCombinedResults(params.query, combined, backendStats, BACKEND_DEFS),
 						},
 					],
@@ -221,21 +229,26 @@ export default function (pi: ExtensionAPI) {
 				for (const backend of orderedBackends) {
 					const t0 = Date.now();
 					try {
-						const results = await runBackend(backend, params.query, numResults, signal);
+						const response = await runBackendDetailed(backend, params.query, numResults, signal);
+						const { results, warning } = response;
 						recordLatency(backend, Date.now() - t0);
+						const formatted = compact
+							? formatResultsCompact(results, warning)
+							: formatResults(params.query, backend, results, warning);
 						return {
 							content: [
 								{
 									type: "text",
 									text: errors.length > 0
-										? `${errors.join("; ")}\n\n${compact ? formatResultsCompact(results) : formatResults(params.query, backend, results)}`
-										: (compact ? formatResultsCompact(results) : formatResults(params.query, backend, results)),
+										? `${errors.join("; ")}\n\n${formatted}`
+										: formatted,
 								},
 							],
 							details: {
 								backend: errors.length > 0 ? `${backend} (fallback)` : backend,
 								resultCount: results.length,
 								errors: errors.length > 0 ? errors : undefined,
+								warning,
 							},
 						};
 					} catch (err) {
