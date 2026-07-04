@@ -259,22 +259,42 @@ export default function (pi: ExtensionAPI) {
 				throw new Error(`All backends failed: ${errors.join("; ")}`);
 			}
 		},
-		renderResult(result, { expanded }, theme) {
-			const details = result.details as { backend: string; resultCount: number; errors?: string[] } | undefined;
+		renderResult(result, { expanded }, theme, context) {
+			const details = result.details as { backend?: unknown; resultCount?: unknown; errors?: unknown; warning?: unknown } | undefined;
 			const text = result.content[0];
 			const raw = text?.type === "text" ? text.text : "";
-			if (!details) return new Text(raw, 0, 0);
-
 			const hint = keyHint("app.tools.expand", "expand");
-			const errorMark = details.errors?.length
+			const isError = context?.isError === true;
+
+			if (isError) {
+				if (!expanded) {
+					return new Text(
+						theme.fg("error", "✗ Search failed") +
+						theme.fg("dim", ` (${hint})`),
+						0, 0,
+					);
+				}
+				return new Text(theme.fg("error", raw || "Search failed"), 0, 0);
+			}
+
+			const backend = typeof details?.backend === "string" ? details.backend : undefined;
+			const resultCount = typeof details?.resultCount === "number" ? details.resultCount : undefined;
+			const errors = Array.isArray(details?.errors) ? details.errors.map(String) : [];
+			const warning = typeof details?.warning === "string" ? details.warning : undefined;
+
+			if (!backend || resultCount === undefined) return new Text(raw, 0, 0);
+
+			const errorMark = errors.length
 				? theme.fg("warning", " [some backends failed]")
 				: "";
+			const warningMark = warning ? theme.fg("warning", " [warning]") : "";
 
 			if (!expanded) {
 				return new Text(
-					theme.fg("success", `✓ ${details.resultCount} result${details.resultCount === 1 ? "" : "s"}`) +
-					theme.fg("muted", ` via ${details.backend}`) +
+					theme.fg("success", `✓ ${resultCount} result${resultCount === 1 ? "" : "s"}`) +
+					theme.fg("muted", ` via ${backend}`) +
 					errorMark +
+					warningMark +
 					theme.fg("dim", ` (${hint})`),
 					0, 0,
 				);
@@ -282,10 +302,14 @@ export default function (pi: ExtensionAPI) {
 
 			// Expanded: render compact list instead of full markdown
 			const lines: string[] = [];
-			if (details.errors?.length) {
-				for (const err of details.errors) {
+			if (errors.length) {
+				for (const err of errors) {
 					lines.push(theme.fg("warning", `⚠ ${err}`));
 				}
+				lines.push("");
+			}
+			if (warning) {
+				lines.push(theme.fg("warning", `⚠ ${warning}`));
 				lines.push("");
 			}
 
