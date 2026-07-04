@@ -70,6 +70,7 @@ The `web_read` tool supports:
 - **mode** — `rush` for speed (return innerText) or `smart` (markdown extraction)
 - **fresh** — bypass cache when freshness matters
 - **reader** — `trafilatura` (local CLI), `jina` (free), or `sofya` (API key). When passed, only this reader is used. When omitted, uses `readerPriority` from config
+- **raw HTML fallback** — set `webReadHtmlFallback: true` in `search.json` to return the page's raw HTML with a warning after all attempted readers fail. If the raw HTML fetch also fails, `web_read` returns an error.
 
 ### Reader fallback (`readerPriority`)
 
@@ -81,7 +82,17 @@ Configure a priority-ordered list of readers in `search.json`. When no explicit 
 }
 ```
 
-If `readerPriority` is unset, `web_read` defaults to a single `trafilatura` with no fallback (matching the previous behavior). You can omit any reader from the list — only listed readers will be tried. If a reader is passed explicitly via the `reader` parameter, no fallback is attempted.
+If `readerPriority` is unset, `web_read` defaults to a single `trafilatura` with no fallback (matching the previous behavior). You can omit any reader from the list — only listed readers will be tried. If a reader is passed explicitly via the `reader` parameter, no reader fallback is attempted.
+
+To use raw HTML as a last resort, enable:
+
+```json
+{
+  "webReadHtmlFallback": true
+}
+```
+
+When enabled, `web_read` tries raw HTML after every attempted reader fails. A successful raw HTML response is returned with a warning. If the raw HTML request fails too, the tool returns an error with the reader failures and the HTML fetch failure.
 
 Failed readers are shown in the rendered result:
 - **Collapsed**: `example.com · 12KB via trafilatura ⚠ [reader failed: jina, sofya]`
@@ -138,6 +149,7 @@ Configure backends globally (all projects) or per-project:
 {
   "defaultBackend": "auto",
   "readerPriority": ["trafilatura", "jina", "sofya"],
+  "webReadHtmlFallback": false,
   "backends": {
     "duckduckgo": { "enabled": true },
     "marginalia": { "enabled": true },

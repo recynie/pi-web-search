@@ -48,7 +48,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
 import type { BackendConfig, SearchConfig, SearchResult, SearchResultWithBackend } from "./types.js";
-import { getAgentDir, timeoutSignal, sanitizeError, formatFetchError, clearCooldowns, MISSING_KEY_HELP } from "./utils.js";
+import { getAgentDir, timeoutSignal, sanitizeError, formatFetchError, clearCooldowns, MISSING_KEY_HELP, validateUrl } from "./utils.js";
 import { resolveBackendKey, getKeySource } from "./credentials.js";
 import { fetchSofya } from "./backends/sofya.js";
 import { fetchTrafilatura } from "./backends/trafilatura.js";
@@ -398,6 +398,36 @@ export default function (pi: ExtensionAPI) {
 		return await response.text();
 	}
 
+	/** Fetch raw HTML directly as a last-resort fallback for web_read. */
+	async function fetchRawHtmlFallback(
+		url: string,
+		signal: AbortSignal | undefined,
+	): Promise<string> {
+		const urlError = validateUrl(url);
+		if (urlError) {
+			throw new Error(`HTML fallback failed for ${url}: ${urlError}`);
+		}
+
+		let response: Response;
+		try {
+			response = await fetch(url, {
+				signal: timeoutSignal(signal),
+				headers: { Accept: "text/html,*/*;q=0.8" },
+			});
+		} catch (error) {
+			throw new Error(`HTML fallback failed for ${url}: ${formatFetchError(error)}`);
+		}
+
+		if (!response.ok) {
+			const text = await response.text().catch(() => "");
+			throw new Error(
+				`HTML fallback failed for ${url}: ${sanitizeError(response.status, text || response.statusText || "HTTP error")}`,
+			);
+		}
+
+		return await response.text();
+	}
+
 	if (config.enableWebRead !== false) pi.registerTool({
 		name: "web_read",
 		label: "Read Web Page",
@@ -405,6 +435,7 @@ export default function (pi: ExtensionAPI) {
 			"Fetch a URL as markdown. Use keywords for long pages, rush for speed, smart for better narrowing. " +
 			"Use reader param to switch between Trafilatura (local CLI, no key), Jina (free), or Sofya (250+ site parsers, needs API key). " +
 			"When omitted, falls back to readerPriority from config. " +
+			"If webReadHtmlFallback is enabled, returns raw HTML with a warning after all readers fail. " +
 			"Output is truncated to " + WEB_READ_DEFAULT_MAX_CHARS.toLocaleString() + " chars by default. " +
 			"Use maxChars to override. When truncated, full content is saved to a temp file and its path is shown.",
 		promptSnippet: "Read content from a web page (supports markdown extraction)",
@@ -415,6 +446,7 @@ export default function (pi: ExtensionAPI) {
 			"Set maxChars to control truncation threshold, or set PI_WEB_READ_MAX_CHARS env var globally",
 			"When truncated, full content is saved to a temp file; use read to inspect it",
 			"Configure readerPriority in search.json for automatic fallback between readers",
+			"Enable webReadHtmlFallback in search.json only when raw HTML is useful as a last resort",
 		],
 		parameters: Type.Object({
 			url: Type.String({
@@ -491,6 +523,7 @@ export default function (pi: ExtensionAPI) {
 			};
 
 			const errors: Array<{ reader: string; cause: string }> = [];
+			const htmlFallbackEnabled = config.webReadHtmlFallback === true;
 
 			for (const reader of readers) {
 				try {
@@ -509,10 +542,34 @@ export default function (pi: ExtensionAPI) {
 					};
 				} catch (err) {
 					errors.push({ reader, cause: (err as Error).message });
-					// If only one reader in list, no fallback — rethrow directly
-					if (readers.length === 1) {
+					// If only one reader in list and HTML fallback is disabled, preserve direct-error semantics.
+					if (readers.length === 1 && !htmlFallbackEnabled) {
 						throw err;
 					}
+				}
+			}
+
+			if (htmlFallbackEnabled) {
+				try {
+					const content = await fetchRawHtmlFallback(url, signal);
+					const { truncated, tempPath, isTruncated } = truncate(content);
+					return {
+						content: [{ type: "text", text: truncated }],
+						details: {
+							url,
+							reader: "html",
+							length: content.length,
+							truncated: isTruncated,
+							tempPath,
+							fallbackErrors: errors,
+							rawHtmlFallback: true,
+							warning: "All web_read readers failed; returned raw HTML without extraction.",
+						},
+					};
+				} catch (err) {
+					errors.push({ reader: "html", cause: (err as Error).message });
+					throw new Error(`All web readers failed for ${url}; HTML fallback also failed. ` +
+						errors.map(e => `${e.reader}: ${e.cause}`).join("; "));
 				}
 			}
 
@@ -528,6 +585,8 @@ export default function (pi: ExtensionAPI) {
 				truncated: boolean;
 				tempPath?: string;
 				fallbackErrors?: Array<{ reader: string; cause: string }>;
+				rawHtmlFallback?: boolean;
+				warning?: string;
 			} | undefined;
 			const text = result.content[0];
 			const raw = text?.type === "text" ? text.text : "";
@@ -544,6 +603,9 @@ export default function (pi: ExtensionAPI) {
 			const failureMark = failedReaders.length > 0
 				? " " + theme.fg("warning", `⚠ [reader failed: ${failedReaders.join(", ")}]`)
 				: "";
+			const htmlFallbackMark = details.rawHtmlFallback
+				? " " + theme.fg("warning", "⚠ [raw HTML fallback]")
+				: "";
 
 			if (!expanded) {
 				const hint = keyHint("app.tools.expand", "expand");
@@ -551,19 +613,25 @@ export default function (pi: ExtensionAPI) {
 					theme.fg("accent", displayUrl) +
 					theme.fg("muted", ` · ${sizeKb}KB via ${details.reader}`) +
 					truncMark +
+					htmlFallbackMark +
 					failureMark +
 					theme.fg("dim", ` (${hint})`),
 					0, 0,
 				);
 			}
 
-			// Expanded: render content with error preamble
+			// Expanded: render content with warning/error preamble
 			let output = raw;
+			const preambleParts: string[] = [];
+			if (details.rawHtmlFallback && details.warning) {
+				preambleParts.push(`${theme.fg("warning", "⚠")} ${details.warning}`);
+			}
 			if (details.fallbackErrors?.length) {
-				const preamble = details.fallbackErrors
-					.map(e => `${theme.fg("warning", "⚠")} ${e.reader} failed: ${e.cause}`)
-					.join("\n");
-				output = preamble + "\n\n---\n\n" + raw;
+				preambleParts.push(...details.fallbackErrors
+					.map(e => `${theme.fg("warning", "⚠")} ${e.reader} failed: ${e.cause}`));
+			}
+			if (preambleParts.length > 0) {
+				output = preambleParts.join("\n") + "\n\n---\n\n" + raw;
 			}
 
 			return new Text(output, 0, 0);

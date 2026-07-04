@@ -91,9 +91,13 @@ function fakeToolRegistration(tools: Record<string, any>) {
 describe("web_read tool", () => {
 	let fetchSpy: ReturnType<typeof vi.spyOn>;
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		fetchSpy = vi.spyOn(global, "fetch");
 		vi.stubEnv("HOME", "/fake-home");
+		const configMod = await import("../extensions/config.js");
+		configMod.config.readerPriority = undefined;
+		configMod.config.webReadHtmlFallback = false;
+		configMod.config.backends = {};
 	});
 
 	afterEach(() => {
@@ -334,6 +338,72 @@ describe("web_read tool", () => {
 			"All web readers failed for https://example.com. " +
 			"jina: Failed to read https://example.com: Jina DNS error; " +
 			"trafilatura: Trafilatura failed for https://example.com: trafilatura CLI error: trafilatura not installed",
+		);
+	});
+
+	it("returns raw HTML with a warning when html fallback is enabled and all readers fail", async () => {
+		fetchSpy
+			.mockRejectedValueOnce(new Error("Jina DNS error"))
+			.mockResolvedValueOnce(new Response("<html><body>Raw page</body></html>", {
+				status: 200,
+				headers: { "content-type": "text/html" },
+			}));
+		execFileMock.mockImplementation((_cmd: string, _args: string[], _opts: any, callback: Function) => {
+			callback(new Error("trafilatura not installed"), null);
+		});
+
+		const configMod = await import("../extensions/config.js");
+		configMod.config.readerPriority = ["jina", "trafilatura"];
+		configMod.config.webReadHtmlFallback = true;
+
+		const tools: Record<string, any> = {};
+		const extension = (await import("../extensions/search-hub.js")).default;
+		extension(fakeToolRegistration(tools));
+
+		const result = await tools.web_read.execute("call", {
+			url: "https://example.com",
+		}, undefined, undefined, { cwd: process.cwd() });
+
+		expect(result.content[0].text).toBe("<html><body>Raw page</body></html>");
+		expect(result.details).toMatchObject({
+			reader: "html",
+			rawHtmlFallback: true,
+			warning: "All web_read readers failed; returned raw HTML without extraction.",
+			fallbackErrors: [
+				{ reader: "jina", cause: expect.stringContaining("Jina DNS error") },
+				{ reader: "trafilatura", cause: expect.stringContaining("trafilatura not installed") },
+			],
+		});
+		expect(fetchSpy).toHaveBeenNthCalledWith(
+			2,
+			"https://example.com",
+			expect.objectContaining({ headers: { Accept: "text/html,*/*;q=0.8" } }),
+		);
+	});
+
+	it("throws an error when html fallback is enabled but raw HTML fetch fails", async () => {
+		fetchSpy
+			.mockRejectedValueOnce(new Error("Jina DNS error"))
+			.mockResolvedValueOnce(new Response("blocked", { status: 403, statusText: "Forbidden" }));
+		execFileMock.mockImplementation((_cmd: string, _args: string[], _opts: any, callback: Function) => {
+			callback(new Error("trafilatura not installed"), null);
+		});
+
+		const configMod = await import("../extensions/config.js");
+		configMod.config.readerPriority = ["jina", "trafilatura"];
+		configMod.config.webReadHtmlFallback = true;
+
+		const tools: Record<string, any> = {};
+		const extension = (await import("../extensions/search-hub.js")).default;
+		extension(fakeToolRegistration(tools));
+
+		await expect(tools.web_read.execute("call", {
+			url: "https://example.com",
+		}, undefined, undefined, { cwd: process.cwd() })).rejects.toThrow(
+			"All web readers failed for https://example.com; HTML fallback also failed. " +
+			"jina: Failed to read https://example.com: Jina DNS error; " +
+			"trafilatura: Trafilatura failed for https://example.com: trafilatura CLI error: trafilatura not installed; " +
+			"html: HTML fallback failed for https://example.com: API error (403): blocked",
 		);
 	});
 

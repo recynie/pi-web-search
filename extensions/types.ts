@@ -50,6 +50,11 @@ export interface SearchConfig {
 	enableWebSearch?: boolean;
 	/** Enable the web_read tool. Default: true. */
 	enableWebRead?: boolean;
+	/**
+	 * When true, web_read fetches and returns raw HTML as a final fallback after
+	 * all configured readers fail. Default: false.
+	 */
+	webReadHtmlFallback?: boolean;
 	/** Cache TTL in milliseconds. Default: 300000 (5 min). Set to 0 to disable. */
 	cacheTtl?: number;
 	/** Max cached queries. Default: 100. */
