@@ -8,6 +8,15 @@ Unified web search + content extraction extension for [pi](https://pi.dev) with 
 pi install npm:pi-search-hub
 ```
 
+The package installs two independent extension resources:
+
+- `web-search.ts` provides `web_search`, `/search-setup`, `/search-status`, and the search status line.
+- `web-read.ts` provides `web_read`.
+
+Run `pi config` to enable or disable either resource globally. Press Tab in `pi config` to switch between global and project-local settings, or start directly in project-local mode with `pi config -l`.
+
+The `search.json` file configures backend and reader behavior. Extension activation is managed exclusively through `pi config`.
+
 > **Note for DuckDuckGo backend:** Requires the `ddgs` Python package. Install with:
 >
 > - Linux/macOS: `pip3 install ddgs`
@@ -141,7 +150,7 @@ Failed readers are shown in the rendered result:
 
 ## Configuration
 
-Configure backends globally (all projects) or per-project:
+Use `pi config` to control whether the `web-search.ts` and `web-read.ts` extension resources are loaded. Configure backend and reader behavior globally or per-project:
 
 **Global:** `~/.pi/agent/extensions/search.json`
 **Project:** `.pi/search.json` (project takes precedence)

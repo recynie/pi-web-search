@@ -46,10 +46,6 @@ export interface SearchConfig {
 	readerPriority?: ("jina" | "sofya" | "trafilatura" | "firecrawl" | "exa" | "exa_mcp")[];
 	/** Show status line with enabled backends. Default: true. Set to false to hide. */
 	showStatus?: boolean;
-	/** Enable the web_search tool. Default: true. */
-	enableWebSearch?: boolean;
-	/** Enable the web_read tool. Default: true. */
-	enableWebRead?: boolean;
 	/**
 	 * When true, web_read fetches and returns raw HTML as a final fallback after
 	 * all configured readers fail. Default: false.

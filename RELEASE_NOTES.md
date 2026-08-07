@@ -1,5 +1,7 @@
 # Unreleased — Upstream correctness and quality sync
 
+- Split `web_search` and `web_read` into independent Pi extension resources controlled through `pi config`.
+- Removed `enableWebSearch` and `enableWebRead` from `search.json`; the file now controls backend and reader behavior only.
 - Added zero-config Exa MCP search and page fetching.
 - Added Firecrawl keyless search and scrape support and Exa Contents page fetching.
 - Wired backend success, latency, and result quality into `best-latency` scoring.

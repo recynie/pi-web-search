@@ -1,7 +1,7 @@
 {
   "name": "pi-search-hub",
   "version": "2.3.0",
-  "description": "Unified web search + content extraction extension for pi with 18 backends, including zero-config Exa MCP and keyless Firecrawl. Auto-fallback, RRF combine mode, web_read with readerPriority fallback, secure credential resolution.",
+  "description": "Independent web_search and web_read extension resources for pi with 18 backends, including zero-config Exa MCP and keyless Firecrawl. Auto-fallback, RRF combine mode, reader fallback, and secure credential resolution.",
   "keywords": [
     "pi-package",
     "pi",
@@ -49,7 +49,8 @@
   "homepage": "https://github.com/ronnieops/pi-search-hub#readme",
   "pi": {
     "extensions": [
-      "./extensions/search-hub.ts"
+      "./extensions/web-search.ts",
+      "./extensions/web-read.ts"
     ],
     "image": "https://pi.dev/assets/packages/pi-search-hub.png"
   },

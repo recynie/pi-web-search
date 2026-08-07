@@ -56,7 +56,7 @@ vi.mock("../extensions/credentials.js", async () => {
 });
 
 // We need config.ts's refreshConfig to not overwrite our test settings.
-// We keep the mutable `config` reference (so search-hub.ts reads the same object),
+// We keep the mutable `config` reference (so web-read.ts reads the same object),
 // but make refreshConfig a no-op that preserves whatever is already on `config`.
 vi.mock("../extensions/config.js", async () => {
 	const actual = await vi.importActual("../extensions/config.js");
@@ -68,7 +68,7 @@ vi.mock("../extensions/config.js", async () => {
 		// For test purposes, we skip the disk reload entirely.
 		return mod.getActiveBackends();
 	});
-	// Ensure config is a mutable ref that search-hub.ts can read
+	// Ensure config is a mutable ref that web-read.ts can read
 	return mod;
 });
 
@@ -120,7 +120,7 @@ describe("web_read tool", () => {
 		}));
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -137,7 +137,7 @@ describe("web_read tool", () => {
 		}), { status: 200, headers: { "content-type": "application/json" } }));
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 		const result = await tools.web_read.execute("call", {
 			url: "https://example.com",
@@ -151,7 +151,7 @@ describe("web_read tool", () => {
 
 	it("blocks private URLs before invoking any reader", async () => {
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -169,7 +169,7 @@ describe("web_read tool", () => {
 		});
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -190,7 +190,7 @@ describe("web_read tool", () => {
 		});
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		const result = await tools.web_read.execute("call", {
@@ -216,7 +216,7 @@ describe("web_read tool", () => {
 		});
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -240,7 +240,7 @@ describe("web_read tool", () => {
 		});
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -261,7 +261,7 @@ describe("web_read tool", () => {
 		});
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -282,7 +282,7 @@ describe("web_read tool", () => {
 		});
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -308,7 +308,7 @@ describe("web_read tool", () => {
 		configMod.config.readerPriority = ["jina", "trafilatura"];
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		const result = await tools.web_read.execute("call", {
@@ -332,7 +332,7 @@ describe("web_read tool", () => {
 		configMod.config.readerPriority = ["jina", "trafilatura"];
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		const result = await tools.web_read.execute("call", {
@@ -359,7 +359,7 @@ describe("web_read tool", () => {
 		configMod.config.readerPriority = ["jina", "trafilatura"];
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -387,7 +387,7 @@ describe("web_read tool", () => {
 		configMod.config.webReadHtmlFallback = true;
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		const result = await tools.web_read.execute("call", {
@@ -424,7 +424,7 @@ describe("web_read tool", () => {
 		configMod.config.webReadHtmlFallback = true;
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -448,7 +448,7 @@ describe("web_read tool", () => {
 		configMod.config.readerPriority = ["sofya"];
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -471,7 +471,7 @@ describe("web_read tool", () => {
 		configMod.config.readerPriority = ["trafilatura", "sofya", "jina"];
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		await expect(tools.web_read.execute("call", {
@@ -497,7 +497,7 @@ describe("web_read tool", () => {
 		configMod.config.backends = { sofya: { enabled: true, apiKey: "test-key" } };
 
 		const tools: Record<string, any> = {};
-		const extension = (await import("../extensions/search-hub.js")).default;
+		const extension = (await import("../extensions/web-read.js")).default;
 		extension(fakeToolRegistration(tools));
 
 		const result = await tools.web_read.execute("call", {
