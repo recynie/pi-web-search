@@ -131,6 +131,36 @@ describe("web_read tool", () => {
 		);
 	});
 
+	it("uses the Firecrawl keyless reader without changing local fallback semantics", async () => {
+		fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({
+			data: { markdown: "# Firecrawl content", metadata: { title: "Example", sourceURL: "https://example.com" } },
+		}), { status: 200, headers: { "content-type": "application/json" } }));
+
+		const tools: Record<string, any> = {};
+		const extension = (await import("../extensions/search-hub.js")).default;
+		extension(fakeToolRegistration(tools));
+		const result = await tools.web_read.execute("call", {
+			url: "https://example.com",
+			reader: "firecrawl",
+		}, undefined, undefined, { cwd: process.cwd() });
+
+		expect(result.content[0].text).toBe("# Firecrawl content");
+		expect(result.details.reader).toBe("firecrawl");
+		expect(fetchSpy.mock.calls[0][0]).toBe("https://api.firecrawl.dev/v2/scrape");
+	});
+
+	it("blocks private URLs before invoking any reader", async () => {
+		const tools: Record<string, any> = {};
+		const extension = (await import("../extensions/search-hub.js")).default;
+		extension(fakeToolRegistration(tools));
+
+		await expect(tools.web_read.execute("call", {
+			url: "http://127.0.0.1/admin",
+			reader: "jina",
+		}, undefined, undefined, { cwd: process.cwd() })).rejects.toThrow("SSRF blocked");
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
 	it("throws directly when explicit reader param is trafilatura and CLI is missing", async () => {
 		execFileMock.mockImplementation((_cmd: string, _args: string[], _opts: any, callback: Function) => {
 			const err = new Error("spawn ENOENT");

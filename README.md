@@ -1,6 +1,6 @@
 # pi-search-hub
 
-Unified web search + content extraction extension for [pi](https://pi.dev) with **17 backend providers** (all working). One `web_search` tool, one `web_read` tool (Trafilatura by default, plus Jina or Sofya readers), auto-fallback, RRF-ranked combine mode, and credential resolution via env/shell/literal.
+Unified web search + content extraction extension for [pi](https://pi.dev) with **18 backend providers**. One `web_search` tool, one `web_read` tool, auto-fallback, RRF-ranked combine mode, and credential resolution via env/shell/literal. Local Trafilatura remains the default reader; Jina, Sofya, Firecrawl, Exa, and Exa MCP are also available.
 
 ## Installation
 
@@ -58,7 +58,7 @@ Search for "Rust vs Go performance benchmarks" with combine=true to get results 
 ### Read Web Pages
 
 Fetch any URL as clean markdown — great for extracting article content, docs, or reference pages.
-**Note: `web_read` defaults to a local Trafilatura CLI reader, and can also use Jina Reader or Sofya.**
+**Note: `web_read` defaults to the local Trafilatura CLI reader. It also supports Jina, Sofya, Firecrawl, Exa, and Exa MCP.**
 
 ```text
 Read https://docs.example.com/api-reference
@@ -69,7 +69,7 @@ The `web_read` tool supports:
 - **keywords** — relevant terms to highlight on long pages
 - **mode** — `rush` for speed (return innerText) or `smart` (markdown extraction)
 - **fresh** — bypass cache when freshness matters
-- **reader** — `trafilatura` (local CLI), `jina` (free), or `sofya` (API key). When passed, only this reader is used. When omitted, uses `readerPriority` from config
+- **reader** — `trafilatura`, `jina`, `sofya`, `firecrawl`, `exa`, or `exa_mcp`. When passed, only this reader is used. When omitted, uses `readerPriority` from config
 - **raw HTML fallback** — set `webReadHtmlFallback: true` in `search.json` to return the page's raw HTML with a warning after all attempted readers fail. If the raw HTML fetch also fails, `web_read` returns an error.
 
 ### Reader fallback (`readerPriority`)
@@ -108,8 +108,9 @@ Failed readers are shown in the rendered result:
 | 4   | **Tavily**            | 1,000 calls/month             |   Yes    | [tavily.com](https://tavily.com)                                  |
 | 5   | **Serper** (Google)   | 2,500 free queries (one-time) |   Yes    | [serper.dev](https://serper.dev)                                  |
 | 6   | **Brave**             | 2,000 queries/month           |   Yes    | [brave.com/search/api](https://brave.com/search/api)              |
-| 7   | **Firecrawl**         | 500 free credits              |   Yes    | [firecrawl.dev](https://www.firecrawl.dev)                        |
+| 7   | **Firecrawl**         | 1,000 keyless credits/month   |  **No**  | [firecrawl.dev](https://www.firecrawl.dev)                        |
 | 8   | **Exa**               | 1,000 free queries/month      |   Yes    | [exa.ai](https://dashboard.exa.ai/api-keys)                       |
+| 8.1 | **Exa MCP**           | Rate-limited hosted access    |   No     | [exa.ai](https://exa.ai/docs/reference/exa-mcp)                   |
 | 9   | **LangSearch**        | Genuinely free, no CC         |   Yes    | [langsearch.com](https://langsearch.com)                          |
 | 10  | **WebSearchAPI.ai**   | 2,000 free credits            |   Yes    | [websearchapi.ai](https://www.websearchapi.ai)                    |
 | 11  | **Perplexity Sonar**  | Paid (usage-based)            |   Yes    | [perplexity.ai](https://docs.perplexity.ai)                       |
@@ -130,7 +131,7 @@ Failed readers are shown in the rendered result:
 >
 > **SearXNG** is a self-hosted metasearch engine. Run your own instance (or use a public one), no API key required. Configure the instance URL in `.pi/search.json`.
 >
-> **Firecrawl** uses `api.firecrawl.dev/v2/search` with a `data.web[]` response shape. The v1 endpoint is deprecated.
+> **Firecrawl** uses the v2 search and scrape APIs. Hosted keyless access works without an API key; configuring a key enables higher-volume use.
 >
 > **Exa** (March 2026) includes content for the first 10 results per request at no extra cost. Content extraction is enabled by default.
 >
@@ -159,6 +160,7 @@ Configure backends globally (all projects) or per-project:
     "tavily": { "enabled": true, "apiKey": "TAVILY_API_KEY" },
     "brave": { "enabled": true, "apiKey": "BRAVE_API_KEY" },
     "exa": { "enabled": true, "apiKey": "EXA_API_KEY" },
+    "exa_mcp": { "enabled": true },
     "firecrawl": { "enabled": true, "apiKey": "FIRECRAWL_API_KEY" },
     "langsearch": { "enabled": true, "apiKey": "LANGSEARCH_API_KEY" },
     "websearchapi": { "enabled": true, "apiKey": "WEBSEARCHAPI_API_KEY" },
@@ -260,7 +262,11 @@ RRF assigns each result a score of `Σ(1 / (60 + rank_i))` across all backends t
 ## Testing
 
 ```bash
-# Run unit tests for backend parsers
+# Run the full test suite and TypeScript checks
+npm test
+npm run typecheck
+
+# Run only the backend parser tests
 npx vitest run backends/parsers.test.ts
 
 # Quick test Jina AI (with your free API key)

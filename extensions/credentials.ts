@@ -34,6 +34,8 @@ export function clearCredentialCache(): void {
  */
 export function resolveConfigValue(reference: string | undefined): string | undefined {
 	if (!reference) return undefined;
+	// Reject common placeholders before interpreting them as env-var names.
+	if (["null", "undefined", "none"].includes(reference.toLowerCase())) return undefined;
 
 	// !command — execute shell command, cache result
 	if (reference.startsWith("!")) {
@@ -86,11 +88,15 @@ export const FALLBACK_ENV_MAP: Record<string, string> = {
 	tavily: "SEARCH_TAVILY_API_KEY",
 	exa: "SEARCH_EXA_API_KEY",
 	brave: "SEARCH_BRAVE_API_KEY",
+	"brave-llm": "SEARCH_BRAVE_API_KEY",
 	langsearch: "SEARCH_LANGSEARCH_API_KEY",
 	firecrawl: "SEARCH_FIRECRAWL_API_KEY",
 	websearchapi: "SEARCH_WEBSEARCHAPI_API_KEY",
 	perplexity: "SEARCH_PERPLEXITY_API_KEY",
 	sofya: "SEARCH_SOFYA_API_KEY",
+	youcom: "SEARCH_YOUCOM_API_KEY",
+	linkup: "SEARCH_LINKUP_API_KEY",
+	fastcrw: "SEARCH_FASTCRW_API_KEY",
 };
 
 /** Lazy resolution: config.apiKey → resolveConfigValue() → FALLBACK_ENV_MAP fallback. */
@@ -119,6 +125,9 @@ export function getKeySource(backend: string, config: SearchConfig): { configure
 		return { configured: false, source: "" };
 	}
 	const ref = bc.apiKey;
+	if (["null", "undefined", "none"].includes(ref.toLowerCase())) {
+		return { configured: false, source: "placeholder rejected" };
+	}
 	if (ref.startsWith("!")) {
 		return { configured: true, source: `shell:${ref.slice(0, 40)}...` };
 	}

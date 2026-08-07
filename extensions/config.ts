@@ -72,10 +72,11 @@ export function loadConfig(cwd: string): SearchConfig {
 				// Deep merge: merge per-backend so global backends not re-listed in project config are preserved
 				const merged = { ...preProjectBackends, ...config.backends };
 				for (const [key, val] of Object.entries(project.backends)) {
-					if (val && merged[key]) {
-						merged[key] = { ...merged[key], ...val };
+					const backendConfig = val as BackendConfig | undefined;
+					if (backendConfig && merged[key]) {
+						merged[key] = { ...merged[key], ...backendConfig };
 					} else {
-						merged[key] = val;
+						merged[key] = backendConfig;
 					}
 				}
 				config.backends = merged;

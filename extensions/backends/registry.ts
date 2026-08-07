@@ -6,12 +6,14 @@ import type { BackendRunner, BackendConfig, SearchResult, BackendSearchResponse 
 import { MISSING_KEY_HELP, waitForCooldown, markCooldown, searchCache, cacheKey } from "../utils.js";
 import { resolveBackendKey } from "../credentials.js";
 import { config } from "../config.js";
+import { recordBackendFailure, recordBackendSuccess } from "../scoring.js";
 
 import { searchDuckDuckGo } from "./duckduckgo.js";
 import { searchMarginalia } from "./marginalia.js";
 import { searchSerper } from "./serper.js";
 import { searchTavily } from "./tavily.js";
 import { searchExa } from "./exa.js";
+import { searchExaMCP } from "./exa-mcp.js";
 import { searchBrave } from "./brave.js";
 import { searchLangSearch } from "./langsearch.js";
 import { searchFirecrawl } from "./firecrawl.js";
@@ -107,6 +109,16 @@ export const BACKEND_DEFS: Record<string, BackendRunner> = {
 			return { results: result.results, warning: result.warning };
 		},
 	},
+	exa_mcp: {
+		needsKey: false,
+		needsKeyFromConfig: false,
+		optionalKey: false,
+		needsInstanceUrl: false,
+		label: "Exa MCP",
+		setupLabel: "Exa MCP (zero-config, rate-limited)",
+		search: async (query, numResults, { signal }) =>
+			searchExaMCP(query, numResults, signal),
+	},
 	brave: {
 		needsKey: true,
 		needsKeyFromConfig: false,
@@ -132,14 +144,14 @@ export const BACKEND_DEFS: Record<string, BackendRunner> = {
 		},
 	},
 	firecrawl: {
-		needsKey: true,
+		needsKey: false,
 		needsKeyFromConfig: false,
-		optionalKey: false,
+		optionalKey: true,
 		needsInstanceUrl: false,
 		label: "Firecrawl",
-		setupLabel: "Firecrawl (500 free credits)",
+		setupLabel: "Firecrawl (keyless free tier, optional key)",
 		search: async (query, numResults, { key, signal }) => {
-			const result = await searchFirecrawl(query, numResults, key!, signal);
+			const result = await searchFirecrawl(query, numResults, key, signal);
 			return { results: result.results };
 		},
 	},
@@ -175,10 +187,8 @@ export const BACKEND_DEFS: Record<string, BackendRunner> = {
 		needsInstanceUrl: true,
 		label: "SearXNG",
 		setupLabel: "SearXNG (self-hosted metasearch)",
-		search: async (query, numResults, { key, instanceUrl, signal }) => {
-			const result = await searchSearXNG(query, numResults, key, instanceUrl, signal);
-			return { results: result.results };
-		},
+		search: async (query, numResults, { key, instanceUrl, signal }) =>
+			searchSearXNG(query, numResults, key, instanceUrl, signal),
 	},
 	"brave-llm": {
 		needsKey: true,
@@ -296,10 +306,16 @@ export async function runBackendDetailed(
 		}
 
 		const bc = (config.backends as Record<string, BackendConfig> | undefined)?.[backend];
-		const result = await def.search(query, numResults, { key, instanceUrl, signal, backendConfig: bc });
-		// Cache the result
-		searchCache.set(cacheKey(query, backend, numResults), result);
-		return result;
+		const startTime = Date.now();
+		try {
+			const result = await def.search(query, numResults, { key, instanceUrl, signal, backendConfig: bc });
+			searchCache.set(cacheKey(query, backend, numResults), result);
+			recordBackendSuccess(backend, Date.now() - startTime, result.results.length, numResults);
+			return result;
+		} catch (error) {
+			recordBackendFailure(backend);
+			throw error;
+		}
 	} finally {
 		markCooldown(backend);
 	}

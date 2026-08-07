@@ -10,6 +10,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { reciprocalRankFusion, selectBackendsForFallback } from "../extensions/dispatch.js";
+import { recordBackendFailure, recordBackendSuccess, scoreBackends } from "../extensions/scoring.js";
+import { BACKEND_DEFS, runBackendDetailed } from "../extensions/backends/registry.js";
 import { resolveConfigValue, clearCredentialCache } from "../extensions/credentials.js";
 import { loadConfig } from "../extensions/config.js";
 import { SearchCache, formatFetchError } from "../extensions/utils.js";
@@ -160,11 +162,71 @@ describe("selectBackendsForFallback", () => {
 		expect(firsts.size).toBeGreaterThanOrEqual(2);
 	});
 
+	it("best-latency returns backends sorted by recorded score", () => {
+		recordBackendSuccess("fast-backend", 100, 10, 10);
+		recordBackendSuccess("slow-backend", 5_000, 10, 10);
+		recordBackendFailure("broken-backend");
+		recordBackendFailure("broken-backend");
+
+		const result = selectBackendsForFallback("best-latency", [
+			"slow-backend", "fast-backend", "broken-backend",
+		]);
+		expect(result[0]).toBe("fast-backend");
+		expect(result[2]).toBe("broken-backend");
+	});
+
+	it("round-robin handles an empty backend list", () => {
+		expect(selectBackendsForFallback("round-robin", [])).toEqual([]);
+	});
+
 	it("does not mutate original array", () => {
 		const backends = ["duckduckgo", "brave", "tavily"];
 		const copy = [...backends];
 		selectBackendsForFallback("random", backends);
 		expect(backends).toEqual(copy);
+	});
+});
+
+describe("backend scoring integration", () => {
+	it("records successful backend calls in the dispatcher", async () => {
+		const name = "test-scoring-success";
+		BACKEND_DEFS[name] = {
+			needsKey: false,
+			needsKeyFromConfig: false,
+			optionalKey: false,
+			needsInstanceUrl: false,
+			label: name,
+			setupLabel: null,
+			search: async () => ({ results: [{ title: "ok", url: "https://example.com" }] }),
+		};
+		try {
+			await runBackendDetailed(name, "query", 1, undefined, { skipCache: true });
+			const score = scoreBackends([name])[0];
+			expect(score.successRate).toBe(1);
+			expect(score.resultRatio).toBe(1);
+		} finally {
+			delete BACKEND_DEFS[name];
+		}
+	});
+
+	it("records failed backend calls in the dispatcher", async () => {
+		const name = "test-scoring-failure";
+		BACKEND_DEFS[name] = {
+			needsKey: false,
+			needsKeyFromConfig: false,
+			optionalKey: false,
+			needsInstanceUrl: false,
+			label: name,
+			setupLabel: null,
+			search: async () => { throw new Error("expected failure"); },
+		};
+		try {
+			await expect(runBackendDetailed(name, "query", 1, undefined, { skipCache: true }))
+				.rejects.toThrow("expected failure");
+			expect(scoreBackends([name])[0].successRate).toBe(0);
+		} finally {
+			delete BACKEND_DEFS[name];
+		}
 	});
 });
 
@@ -193,6 +255,12 @@ describe("resolveConfigValue", () => {
 		expect(resolveConfigValue("sk-abc123")).toBe("sk-abc123");
 	});
 
+	it("rejects common placeholder values", () => {
+		expect(resolveConfigValue("null")).toBeUndefined();
+		expect(resolveConfigValue("Undefined")).toBeUndefined();
+		expect(resolveConfigValue("NONE")).toBeUndefined();
+	});
+
 	it("resolves ALL_CAPS from env var", () => {
 		process.env.TEST_SEARCH_KEY_123 = "secret-value";
 		try {
@@ -217,10 +285,17 @@ describe("resolveConfigValue", () => {
 
 describe("loadConfig", () => {
 	it("returns default config when no config files exist", () => {
-		const cfg = loadConfig("/nonexistent/path");
-		expect(cfg.defaultBackend).toBe("duckduckgo");
-		// May have auto-enabled backends from convenience env vars
-		expect(typeof cfg.backends).toBe("object");
+		const originalHome = process.env.HOME;
+		process.env.HOME = "/nonexistent/pi-search-hub-test-home";
+		try {
+			const cfg = loadConfig("/nonexistent/path");
+			expect(cfg.defaultBackend).toBe("duckduckgo");
+			// Convenience env vars may still auto-enable backends.
+			expect(typeof cfg.backends).toBe("object");
+		} finally {
+			if (originalHome === undefined) delete process.env.HOME;
+			else process.env.HOME = originalHome;
+		}
 	});
 });
 

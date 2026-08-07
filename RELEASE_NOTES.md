@@ -1,3 +1,15 @@
+# Unreleased — Upstream correctness and quality sync
+
+- Added zero-config Exa MCP search and page fetching.
+- Added Firecrawl keyless search and scrape support and Exa Contents page fetching.
+- Wired backend success, latency, and result quality into `best-latency` scoring.
+- Improved DuckDuckGo missing-package diagnostics and fixed empty round-robin selection.
+- Added credential placeholder rejection and convenience environment variables for more backends.
+- Added TypeScript checks, CI, and focused backend, scoring, SSRF, and reader tests.
+- Preserved the local Trafilatura default, `readerPriority` semantics, output spillover, raw HTML fallback, and collapsed result rendering.
+
+---
+
 # Release v2.3.0 (web_read reader fallback with readerPriority)
 
 ## 🚀 New

@@ -3,7 +3,7 @@
  */
 
 import type { SearchResult, SearchResultWithBackend } from "./types.js";
-import { config, roundRobinIndex, incrementRoundRobin, latencyMap } from "./config.js";
+import { roundRobinIndex, incrementRoundRobin } from "./config.js";
 import { scoreBackends } from "./scoring.js";
 
 // ---------------------------------------------------------------------------
@@ -15,6 +15,7 @@ export function selectBackendsForFallback(
 	activeBackends: string[],
 ): string[] {
 	const backends = [...activeBackends];
+	if (backends.length === 0) return [];
 	switch (strategy) {
 		case "random": {
 			for (let i = backends.length - 1; i > 0; i--) {

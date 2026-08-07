@@ -51,7 +51,10 @@ except ImportError as e:
             ddgs_path = pathlib.Path(ddgs_bin).resolve()
             found = False
             for parent in [ddgs_path, *ddgs_path.parents]:
-                for py_ver_dir in sorted((parent / "lib").iterdir(), reverse=True):
+                lib_dir = parent / "lib"
+                if not lib_dir.is_dir():
+                    continue
+                for py_ver_dir in sorted(lib_dir.iterdir(), reverse=True):
                     sp = py_ver_dir / "site-packages"
                     if sp.is_dir():
                         sys.path.insert(0, str(sp))
@@ -60,10 +63,10 @@ except ImportError as e:
                 if found:
                     break
             if not found:
-                print(f"ddgs import failed, path search failed: {e}", file=sys.stderr)
+                print(f"ddgs import failed, path search failed: {e}. Install with: pip3 install ddgs", file=sys.stderr)
                 sys.exit(1)
     except Exception as ex:
-        print(f"ddgs import failed: {e}, path search failed: {ex}", file=sys.stderr)
+        print(f"ddgs import failed: {e}, path search failed: {ex}. Install with: pip3 install ddgs", file=sys.stderr)
         sys.exit(1)
     from ddgs import DDGS
 
@@ -71,10 +74,10 @@ results = []
 error_msg = None
 try:
     with DDGS() as ddgs:
-    kwargs = {"query": ${JSON.stringify(query)}, "max_results": ${numResults}, "backend": ${JSON.stringify(backend)}, "region": ${JSON.stringify(region)}, "safesearch": ${JSON.stringify(safesearch)}}
-    ${timelimit ? `kwargs["timelimit"] = ${JSON.stringify(timelimit)}` : ""}
-    for i, r in enumerate(ddgs.text(**kwargs)):
-        results.append({"title": r.get("title",""), "url": r.get("href",""), "snippet": r.get("body","")})
+        kwargs = {"query": ${JSON.stringify(query)}, "max_results": ${numResults}, "backend": ${JSON.stringify(backend)}, "region": ${JSON.stringify(region)}, "safesearch": ${JSON.stringify(safesearch)}}
+        ${timelimit ? `kwargs["timelimit"] = ${JSON.stringify(timelimit)}` : ""}
+        for i, r in enumerate(ddgs.text(**kwargs)):
+            results.append({"title": r.get("title",""), "url": r.get("href",""), "snippet": r.get("body","")})
 except Exception as ex:
     error_msg = f"{type(ex).__name__}: {ex}"
 

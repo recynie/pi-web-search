@@ -2,6 +2,7 @@
  * Shared utilities for pi-search-hub extension.
  */
 
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BackendSearchResponse } from "./types.js";
 
@@ -145,7 +146,6 @@ function getCurrentMonthStart(): string {
 
 function readUsage(): ExaUsageRecord {
 	try {
-		const { readFileSync } = require("node:fs") as typeof import("node:fs");
 		const data = readFileSync(getUsageFilePath(), "utf-8");
 		return JSON.parse(data) as ExaUsageRecord;
 	} catch {
@@ -155,7 +155,6 @@ function readUsage(): ExaUsageRecord {
 
 function writeUsage(record: ExaUsageRecord): void {
 	try {
-		const { writeFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
 		const dir = getAgentDir();
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(getUsageFilePath(), JSON.stringify(record, null, 2));
@@ -229,6 +228,7 @@ export function isPrivateHost(host: string): boolean {
 		// Parse as IPv4
 		if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) {
 			const parts = ip.split(".").map(Number);
+			if (parts.some(part => part < 0 || part > 255)) return true;
 
 			// 127.0.0.0/8 — loopback
 			if (parts[0] === 127) return true;

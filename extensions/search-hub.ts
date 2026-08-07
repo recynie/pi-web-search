@@ -1,5 +1,5 @@
 /**
- * Extension — Unified web search (12 backends) + content extraction (web_read)
+ * Extension — Unified web search (18 backends) + content extraction (web_read)
  *
  * Backends (choose any, all disabled by default):
  *   duckduckgo    — ✅ Free, no key, via Python ddgs lib. Rate-limited.
@@ -8,8 +8,9 @@
  *   serper        — ✅ Google via serper.dev, 2500 free/mo. 667ms
  *   brave         — ✅ Brave Search, 2000 free/mo. 460ms
  *   tavily        — ✅ AI search, 1000 free/mo. 356ms BEST QUALITY
- *   exa           — ✅ AI-native, 10 QPS free tier. 137ms FASTEST
- *   firecrawl     — ✅ Search+crawl, 500 free credits. 644ms
+ *   exa           — ✅ AI-native, 1000 requests/month
+ *   exa_mcp       — ✅ Zero-config hosted MCP search
+ *   firecrawl     — ✅ Search+crawl, keyless hosted tier
  *   langsearch    — ✅ Free tier, no CC. 1816ms
  *   websearchapi  — ✅ Google-powered, 2000 free credits. 1323ms
  *   perplexity    — ✅ Unlimited free Sonar, citation-based answers
@@ -28,7 +29,8 @@
  *       "serper": { "enabled": true, "apiKey": "..." },
  *       "tavily": { "enabled": true, "apiKey": "..." },
  *       "exa": { "enabled": true, "apiKey": "..." },
- *       "firecrawl": { "enabled": true, "apiKey": "..." },
+ *       "exa_mcp": { "enabled": true },
+ *       "firecrawl": { "enabled": true },
  *       "langsearch": { "enabled": true, "apiKey": "..." },
  *       "websearchapi": { "enabled": true, "apiKey": "..." },
  *       "perplexity": { "enabled": true, "apiKey": "..." },
@@ -52,6 +54,9 @@ import { getAgentDir, timeoutSignal, sanitizeError, formatFetchError, clearCoold
 import { resolveBackendKey, getKeySource } from "./credentials.js";
 import { fetchSofya } from "./backends/sofya.js";
 import { fetchTrafilatura } from "./backends/trafilatura.js";
+import { fetchFirecrawl } from "./backends/firecrawl.js";
+import { fetchExaContents } from "./backends/exa.js";
+import { fetchExaMCP } from "./backends/exa-mcp.js";
 import { config, refreshConfig, getActiveBackends, recordLatency, latencyMap } from "./config.js";
 import { BACKEND_DEFS, runBackendDetailed } from "./backends/registry.js";
 import { selectBackendsForFallback, reciprocalRankFusion } from "./dispatch.js";
@@ -99,7 +104,7 @@ export default function (pi: ExtensionAPI) {
 				}),
 			),
 			backend: Type.Optional(
-				StringEnum(["duckduckgo", "jina", "marginalia", "serper", "tavily", "exa",
+				StringEnum(["duckduckgo", "jina", "marginalia", "serper", "tavily", "exa", "exa_mcp",
 					"brave", "brave-llm", "langsearch", "firecrawl", "websearchapi", "perplexity",
 					"searxng", "linkup", "youcom", "fastcrw", "sofya", "auto"] as const, {
 					description:
@@ -361,6 +366,24 @@ export default function (pi: ExtensionAPI) {
 			return result.content;
 		}
 
+		if (reader === "firecrawl") {
+			const key = resolveBackendKey("firecrawl", config);
+			const result = await fetchFirecrawl(url, key, signal);
+			return result.content;
+		}
+
+		if (reader === "exa") {
+			const key = resolveBackendKey("exa", config);
+			if (!key) throw new Error(`Exa reader selected but no API key configured. ${MISSING_KEY_HELP}`);
+			const result = await fetchExaContents(url, key, signal);
+			return result.content;
+		}
+
+		if (reader === "exa_mcp") {
+			const result = await fetchExaMCP(url, signal);
+			return result.content;
+		}
+
 		// Jina Reader: free, supports keywords and mode hints.
 		const readerUrl = new URL("https://r.jina.ai/" + url);
 		const headers: Record<string, string> = {
@@ -395,6 +418,10 @@ export default function (pi: ExtensionAPI) {
 			throw new Error(`Failed to read ${url}: ${sanitizeError(response.status, text)}`);
 		}
 
+		const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+		if (Number.isFinite(contentLength) && contentLength > 2 * 1024 * 1024) {
+			throw new Error(`Failed to read ${url}: response too large (${contentLength} bytes, limit 2097152)`);
+		}
 		return await response.text();
 	}
 
@@ -433,7 +460,7 @@ export default function (pi: ExtensionAPI) {
 		label: "Read Web Page",
 		description:
 			"Fetch a URL as markdown. Use keywords for long pages, rush for speed, smart for better narrowing. " +
-			"Use reader param to switch between Trafilatura (local CLI, no key), Jina (free), or Sofya (250+ site parsers, needs API key). " +
+			"Use reader param to select Trafilatura, Jina, Sofya, Firecrawl, Exa, or Exa MCP. " +
 			"When omitted, falls back to readerPriority from config. " +
 			"If webReadHtmlFallback is enabled, returns raw HTML with a warning after all readers fail. " +
 			"Output is truncated to " + WEB_READ_DEFAULT_MAX_CHARS.toLocaleString() + " chars by default. " +
@@ -476,11 +503,11 @@ export default function (pi: ExtensionAPI) {
 				}),
 			),
 			reader: Type.Optional(
-				StringEnum(["jina", "sofya", "trafilatura"] as const, {
+				StringEnum(["jina", "sofya", "trafilatura", "firecrawl", "exa", "exa_mcp"] as const, {
 					description:
 						"Reader backend. Overrides the configured readerPriority. " +
-						"'trafilatura' (local CLI, no key), 'jina' (free), " +
-						"or 'sofya' (250+ site parsers, needs API key)."
+						"Trafilatura, Jina, and Exa MCP need no key; Firecrawl supports keyless access; " +
+						"Sofya and Exa require API keys."
 				}),
 			),
 		}),
@@ -490,6 +517,8 @@ export default function (pi: ExtensionAPI) {
 			const url = params.url.startsWith("https://") || params.url.startsWith("http://")
 				? params.url
 				: `https://${params.url}`;
+			const urlError = validateUrl(url);
+			if (urlError) throw new Error(urlError);
 
 			// Determine maxChars: explicit param > PI_WEB_READ_MAX_CHARS env var > default
 			const envMaxChars = process.env.PI_WEB_READ_MAX_CHARS
@@ -528,6 +557,7 @@ export default function (pi: ExtensionAPI) {
 			for (const reader of readers) {
 				try {
 					const content = await fetchWithReader(reader, url, signal, params);
+					if (!content.trim()) throw new Error(`${reader} returned no content for ${url}`);
 					const { truncated, tempPath, isTruncated } = truncate(content);
 					return {
 						content: [{ type: "text", text: truncated }],
@@ -835,6 +865,9 @@ export default function (pi: ExtensionAPI) {
 				} else if (name === "searxng" && bc?.enabled) {
 					const urlInfo = bc.instanceUrl ? `url: ${bc.instanceUrl}` : "no URL set";
 					rows.push([label, `\u2713 enabled, ${urlInfo}${configured ? `, key: \u2713 (${source})` : ", key: \u2014"}`, avgLatency]);
+				} else if (bc?.enabled && BACKEND_DEFS[name]?.optionalKey) {
+					const keyInfo = configured ? `\u2713 (${source})` : "optional (keyless)";
+					rows.push([label, `\u2713 enabled, key: ${keyInfo}`, avgLatency]);
 				} else if (bc?.enabled) {
 					rows.push([label, `\u2713 enabled, key: \u2713${source ? ` (${source})` : ""}`, avgLatency]);
 				} else {

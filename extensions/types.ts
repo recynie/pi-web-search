@@ -43,7 +43,7 @@ export interface SearchConfig {
 	 * until one succeeds. If unset, behaves as ["trafilatura"] (single-reader mode,
 	 * no fallback). Can omit any reader — only listed ones are tried.
 	 */
-	readerPriority?: ("jina" | "sofya" | "trafilatura")[];
+	readerPriority?: ("jina" | "sofya" | "trafilatura" | "firecrawl" | "exa" | "exa_mcp")[];
 	/** Show status line with enabled backends. Default: true. Set to false to hide. */
 	showStatus?: boolean;
 	/** Enable the web_search tool. Default: true. */
@@ -66,9 +66,9 @@ export interface SearchConfig {
 		serper?: BackendConfig;
 		tavily?: BackendConfig;
 		exa?: BackendConfig;
+		exa_mcp?: BackendConfig;
 		brave?: BackendConfig;
 		braveLLM?: BackendConfig;
-		"brave-llm"?: BackendConfig;
 		"brave-llm"?: BackendConfig;
 		langsearch?: BackendConfig;
 		firecrawl?: BackendConfig;
@@ -79,6 +79,7 @@ export interface SearchConfig {
 		youcom?: BackendConfig;
 		fastcrw?: BackendConfig;
 		sofya?: BackendConfig;
+		[key: string]: BackendConfig | undefined;
 	};
 }
 
